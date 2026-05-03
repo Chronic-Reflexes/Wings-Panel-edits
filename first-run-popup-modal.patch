@@ -411,7 +411,7 @@ new file mode 100644
 index 0000000..b595a1b
 --- /dev/null
 +++ b/database/migrations/2026_05_03_000001_add_popup_modal_compat_columns_to_eggs_table.php
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,64 @@
 +<?php
 +
 +use Illuminate\Support\Facades\DB;
