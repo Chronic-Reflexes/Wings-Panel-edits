@@ -502,33 +502,12 @@ index 16743ef..0c48c69 100644
      limits: { ...data.limits },
      eggFeatures: data.egg_features || [],
      featureLimits: { ...data.feature_limits },
-diff --git a/resources/scripts/components/server/settings/ReinstallServerBox.tsx b/resources/scripts/components/server/settings/ReinstallServerBox.tsx
-index ff08007..f0d5b5f 100644
---- a/resources/scripts/components/server/settings/ReinstallServerBox.tsx
-+++ b/resources/scripts/components/server/settings/ReinstallServerBox.tsx
-@@ -10,12 +10,15 @@ import { Dialog } from '@/components/elements/dialog';
- 
- export default () => {
-     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
-+    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
-     const [modalVisible, setModalVisible] = useState(false);
-     const { addFlash, clearFlashes } = useStoreActions((actions: Actions<ApplicationStore>) => actions.flashes);
- 
-     const reinstall = () => {
-         clearFlashes('settings');
-+        const popupStorageKey = `ptero:popup-modal:on_first_start:${identifier}`;
-         reinstallServer(uuid)
-             .then(() => {
-+                localStorage.removeItem(popupStorageKey);
-                 addFlash({
-                     key: 'settings',
-                     type: 'success',
 diff --git a/resources/scripts/components/server/features/FirstRunPopupFeature.tsx b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
 new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,132 @@
+@@ -0,0 +1,143 @@
 +import React, { useEffect, useMemo, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
@@ -546,6 +525,7 @@ index 0000000..e5c41f1
 +
 +const FirstRunPopupFeature = () => {
 +    const serverIdentifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
++    const serverStatus = ServerContext.useStoreState((state) => state.server.data!.status);
 +    const firstStartTitle = ServerContext.useStoreState((state) => state.server.data!.popupOnFirstStartTitle);
 +    const firstStartContent = ServerContext.useStoreState((state) => state.server.data!.popupOnFirstStartContent);
 +    const errorTitle = ServerContext.useStoreState((state) => state.server.data!.popupOnConsoleErrorTitle);
@@ -571,6 +551,16 @@ index 0000000..e5c41f1
 +
 +        return null;
 +    });
+
++    useEffect(() => {
++        if (!hasFirstStartPopup) {
++            return;
++        }
++
++        if (serverStatus === 'installing' || serverStatus === 'install_failed' || serverStatus === 'reinstall_failed') {
++            localStorage.removeItem(storageKey(String(serverIdentifier), 'on_first_start'));
++        }
++    }, [serverIdentifier, serverStatus, hasFirstStartPopup]);
 +
 +    useEffect(() => {
 +        const identifier = String(serverIdentifier);
