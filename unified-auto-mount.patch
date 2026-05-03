@@ -46,6 +46,7 @@ diff --git a/app/Models/Mount.php b/app/Models/Mount.php
 +        'auto_mount' => 'sometimes|boolean',
      ];
  
+     /**
 diff --git a/app/Providers/EventServiceProvider.php b/app/Providers/EventServiceProvider.php
 --- a/app/Providers/EventServiceProvider.php
 +++ b/app/Providers/EventServiceProvider.php
