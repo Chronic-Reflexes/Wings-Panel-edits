@@ -722,6 +722,12 @@ diff --git a/resources/scripts/components/server/features/index.ts b/resources/s
 index d9bdf07..32ed161 100644
 --- a/resources/scripts/components/server/features/index.ts
 +++ b/resources/scripts/components/server/features/index.ts
+@@ -1,4 +1,5 @@
+ import { ComponentType, lazy } from 'react';
++import FirstRunPopupFeature from '@feature/FirstRunPopupFeature';
+ 
+ /**
+  * Custom features should be registered here as lazy components so that they do
 @@ -8,6 +8,7 @@ import { ComponentType, lazy } from 'react';
   */
  const features: Record<string, ComponentType> = {
@@ -730,6 +736,12 @@ index d9bdf07..32ed161 100644
      java_version: lazy(() => import('@feature/JavaVersionModalFeature')),
      gsl_token: lazy(() => import('@feature/GSLTokenModalFeature')),
      pid_limit: lazy(() => import('@feature/PIDLimitModalFeature')),
+@@ -15,4 +16,5 @@ const features: Record<string, ComponentType> = {
+     hytale_oauth: lazy(() => import('@feature/HytaleOauthRequireFeature')),
+ };
++features.popup_modals = FirstRunPopupFeature;
+ 
+ export default features;
 diff --git a/resources/views/admin/eggs/popup.blade.php b/resources/views/admin/eggs/popup.blade.php
 new file mode 100644
 index 0000000..ec95c1b
