@@ -1,0 +1,29 @@
+From 72e806eb7f4dc6771795ff8e0a71312060401f76 Mon Sep 17 00:00:00 2001
+From: Alexe Vlad <alexevladgabriel@gmail.com>
+Date: Sun, 3 Apr 2022 21:54:26 +0300
+Subject: [PATCH] Added mounts to installation script, only if there are active
+
+---
+ server/install.go | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/server/install.go b/server/install.go
+index 8716d2d63..b16bf182d 100644
+--- a/server/install.go
++++ b/server/install.go
+@@ -451,6 +451,15 @@ func (ip *InstallationProcess) Execute() (string, error) {
+ 		NetworkMode: container.NetworkMode(config.Get().Docker.Network.Mode),
+ 	}
+ 
++	for _, m := range ip.Server.customMounts() {
++		hostConf.Mounts = append(hostConf.Mounts, mount.Mount{
++			Target:   m.Target,
++			Source:   m.Source,
++			Type:     mount.TypeBind,
++			ReadOnly: m.ReadOnly,
++		})
++	}
++
+ 	// Ensure the root directory for the server exists properly before attempting
+ 	// to trigger the reinstall of the server. It is possible the directory would
+ 	// not exist when this runs if Wings boots with a missing directory and a user
