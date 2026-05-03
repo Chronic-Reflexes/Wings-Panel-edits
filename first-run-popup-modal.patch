@@ -1,9 +1,9 @@
 diff --git a/app/Http/Controllers/Admin/Nests/EggPopupController.php b/app/Http/Controllers/Admin/Nests/EggPopupController.php
 new file mode 100644
-index 0000000..6a1d7f5
+index 0000000..b7e5e1c
 --- /dev/null
 +++ b/app/Http/Controllers/Admin/Nests/EggPopupController.php
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,144 @@
 +<?php
 +
 +namespace Pterodactyl\Http\Controllers\Admin\Nests;
@@ -11,6 +11,7 @@ index 0000000..6a1d7f5
 +use Illuminate\View\View;
 +use Pterodactyl\Models\Egg;
 +use Illuminate\Http\RedirectResponse;
++use Illuminate\Support\Facades\Schema;
 +use Prologue\Alerts\AlertsMessageBag;
 +use Pterodactyl\Http\Controllers\Controller;
 +use Pterodactyl\Services\Eggs\EggUpdateService;
@@ -24,12 +25,16 @@ index 0000000..6a1d7f5
 +            'description' => 'Shown once when a user first opens the server console.',
 +            'title_field' => 'popup_on_first_start_title',
 +            'content_field' => 'popup_on_first_start_content',
++            'legacy_title_field' => 'first_run_popup_title',
++            'legacy_content_field' => 'first_run_popup_content',
 +        ],
 +        'on_console_error' => [
 +            'name' => 'On Console Error Message',
 +            'description' => 'Shown when an error-like line is detected in console output.',
 +            'title_field' => 'popup_on_console_error_title',
 +            'content_field' => 'popup_on_console_error_content',
++            'legacy_title_field' => null,
++            'legacy_content_field' => null,
 +        ],
 +    ];
 +
@@ -45,12 +50,11 @@ index 0000000..6a1d7f5
 +    public function index(Egg $egg): View
 +    {
 +        $popups = collect(self::POPUPS)->map(function (array $popup, string $key) use ($egg) {
-+            $titleField = $popup['title_field'];
-+            $contentField = $popup['content_field'];
++            $fields = $this->resolveStorageFields($popup);
 +
 +            return array_merge($popup, [
 +                'key' => $key,
-+                'is_configured' => filled($egg->{$titleField}) || filled($egg->{$contentField}),
++                'is_configured' => filled($this->getEggFieldValue($egg, $fields['title'])) || filled($this->getEggFieldValue($egg, $fields['content'])),
 +            ]);
 +        })->values();
 +
@@ -66,15 +70,14 @@ index 0000000..6a1d7f5
 +    public function view(Egg $egg, string $popupKey): View
 +    {
 +        $popup = $this->resolvePopup($popupKey);
-+        $titleField = $popup['title_field'];
-+        $contentField = $popup['content_field'];
++        $fields = $this->resolveStorageFields($popup);
 +
 +        return view('admin.eggs.popup', [
 +            'egg' => $egg,
 +            'popup' => $popup,
 +            'popupKey' => $popupKey,
-+            'titleValue' => $egg->{$titleField},
-+            'contentValue' => $egg->{$contentField},
++            'titleValue' => $this->getEggFieldValue($egg, $fields['title']),
++            'contentValue' => $this->getEggFieldValue($egg, $fields['content']),
 +        ]);
 +    }
 +
@@ -88,14 +91,25 @@ index 0000000..6a1d7f5
 +    public function update(EggPopupFormRequest $request, Egg $egg, string $popupKey): RedirectResponse
 +    {
 +        $popup = $this->resolvePopup($popupKey);
-+        $titleField = $popup['title_field'];
-+        $contentField = $popup['content_field'];
++        $fields = $this->resolveStorageFields($popup);
 +        $data = $request->validated();
++        $payload = [];
 +
-+        $this->updateService->handle($egg, [
-+            $titleField => $data['title'],
-+            $contentField => $data['content'],
-+        ]);
++        if (!is_null($fields['title'])) {
++            $payload[$fields['title']] = $data['title'];
++        }
++
++        if (!is_null($fields['content'])) {
++            $payload[$fields['content']] = $data['content'];
++        }
++
++        if (empty($payload)) {
++            $this->alert->warning('Popup columns are not available yet. Run database migrations and try again.')->flash();
++
++            return redirect()->route('admin.nests.egg.popup.view', [$egg->id, $popupKey]);
++        }
++
++        $this->updateService->handle($egg, $payload);
 +        $this->alert->success(trans('admin/nests.eggs.notices.updated'))->flash();
 +
 +        return redirect()->route('admin.nests.egg.popup.view', [$egg->id, $popupKey]);
@@ -106,6 +120,32 @@ index 0000000..6a1d7f5
 +        abort_unless(array_key_exists($popupKey, self::POPUPS), 404);
 +
 +        return self::POPUPS[$popupKey];
++    }
++
++    private function resolveStorageFields(array $popup): array
++    {
++        $title = $popup['title_field'];
++        $content = $popup['content_field'];
++
++        if (Schema::hasColumn('eggs', $title) && Schema::hasColumn('eggs', $content)) {
++            return ['title' => $title, 'content' => $content];
++        }
++
++        $legacyTitle = $popup['legacy_title_field'];
++        $legacyContent = $popup['legacy_content_field'];
++        if (!is_null($legacyTitle) && !is_null($legacyContent)
++            && Schema::hasColumn('eggs', $legacyTitle)
++            && Schema::hasColumn('eggs', $legacyContent)
++        ) {
++            return ['title' => $legacyTitle, 'content' => $legacyContent];
++        }
++
++        return ['title' => null, 'content' => null];
++    }
++
++    private function getEggFieldValue(Egg $egg, ?string $field): ?string
++    {
++        return is_null($field) ? null : $egg->{$field};
 +    }
 +}
 diff --git a/app/Http/Requests/Admin/Egg/EggFormRequest.php b/app/Http/Requests/Admin/Egg/EggFormRequest.php
@@ -195,17 +235,6 @@ index 7b5f6ac..339204c 100644
          'author' => 'required|string|email',
          'file_denylist' => 'array|nullable',
          'file_denylist.*' => 'string',
-@@ -144,6 +156,10 @@ class Egg extends Model implements Identifiable
- 
-     protected $attributes = [
-         'features' => null,
-+        'popup_on_first_start_title' => null,
-+        'popup_on_first_start_content' => null,
-+        'popup_on_console_error_title' => null,
-+        'popup_on_console_error_content' => null,
-         'file_denylist' => null,
-         'config_stop' => null,
-         'config_startup' => null,
 @@ -252,6 +268,54 @@ class Egg extends Model implements Identifiable
          return $this->configFrom->features;
      }
