@@ -720,14 +720,13 @@ diff --git a/resources/scripts/components/server/console/PowerButtons.tsx b/reso
 index 55c59bc..fbc6a92 100644
 --- a/resources/scripts/components/server/console/PowerButtons.tsx
 +++ b/resources/scripts/components/server/console/PowerButtons.tsx
-@@ -11,10 +11,18 @@ interface PowerButtonProps {
- export default ({ className }: PowerButtonProps) => {
-      const [open, setOpen] = useState(false);
-      const status = ServerContext.useStoreState((state) => state.status.value);
+@@ -13,17 +13,26 @@ export default ({ className }: PowerButtonProps) => {
+     const [open, setOpen] = useState(false);
+     const status = ServerContext.useStoreState((state) => state.status.value);
 +    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
-      const instance = ServerContext.useStoreState((state) => state.socket.instance);
- 
-      const killable = status === 'stopping';
+     const instance = ServerContext.useStoreState((state) => state.socket.instance);
+
+     const killable = status === 'stopping';
 +    const markPowerAction = (action: PowerAction | 'kill-confirmed') => {
 +        if (action === 'start' || action === 'restart') {
 +            const key = `ptero:popup-modal:power_action:${identifier}`;
@@ -735,18 +734,21 @@ index 55c59bc..fbc6a92 100644
 +        }
 +    };
 +
-      const onButtonClick = (
-           action: PowerAction | 'kill-confirmed',
-           e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+     const onButtonClick = (
+         action: PowerAction | 'kill-confirmed',
+         e: React.MouseEvent<HTMLButtonElement, MouseEvent>
      ): void => {
-@@ -26,6 +34,7 @@ export default ({ className }: PowerButtonProps) => {
- 
-           if (instance) {
-                setOpen(false);
+         e.preventDefault();
+         if (action === 'kill') {
+             return setOpen(true);
+         }
+
+         if (instance) {
+             setOpen(false);
 +            markPowerAction(action);
-                instance.send('set state', action === 'kill-confirmed' ? 'kill' : action);
-           }
-      };
+             instance.send('set state', action === 'kill-confirmed' ? 'kill' : action);
+         }
+     };
 
 diff --git a/resources/scripts/components/server/features/index.ts b/resources/scripts/components/server/features/index.ts
 index d9bdf07..32ed161 100644
