@@ -574,7 +574,7 @@ index 0000000..e5c41f1
 +
 +        if (
 +            hasFirstStartPopup
-+            && runtimeStatus === 'running'
++            && (runtimeStatus === 'starting' || runtimeStatus === 'running')
 +            && hasSeenNonRunningSinceMount.current
 +            && (hasSeenPowerActionSinceMount.current || localStorage.getItem(powerActionKey(identifier)) === '1')
 +            && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1'
@@ -600,7 +600,7 @@ index 0000000..e5c41f1
 +        };
 +
 +        const handleServerStatus = (status: string) => {
-+            if (status !== 'running') {
++            if (status === 'offline') {
 +                hasSeenNonRunningSinceMount.current = true;
 +                return;
 +            }
