@@ -507,8 +507,8 @@ new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,167 @@
-+import React, { useEffect, useMemo, useRef, useState } from 'react';
++@@ -0,0 +1,133 @@
++import React, { useEffect, useMemo, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
 +import tw from 'twin.macro';
@@ -544,8 +544,6 @@ index 0000000..e5c41f1
 +    );
 +
 +    const [activePopup, setActivePopup] = useState<PopupMode | null>(null);
-+    const hasSeenNonRunningSinceMount = useRef(runtimeStatus !== 'running');
-+    const hasSeenPowerActionSinceMount = useRef(localStorage.getItem(powerActionKey(String(serverIdentifier))) === '1');
 +
 +    useEffect(() => {
 +        if (!hasFirstStartPopup) {
@@ -555,27 +553,15 @@ index 0000000..e5c41f1
 +        if (runtimeStatus === 'installing' || runtimeStatus === 'install_failed' || runtimeStatus === 'reinstall_failed') {
 +            localStorage.removeItem(storageKey(String(serverIdentifier), 'on_first_start'));
 +            localStorage.removeItem(powerActionKey(String(serverIdentifier)));
-+            hasSeenPowerActionSinceMount.current = false;
 +        }
 +    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
 +
 +    useEffect(() => {
-+        if (runtimeStatus && runtimeStatus !== 'running') {
-+            hasSeenNonRunningSinceMount.current = true;
-+        }
-+    }, [runtimeStatus]);
-+
-+    useEffect(() => {
 +        const identifier = String(serverIdentifier);
-+
-+        if (localStorage.getItem(powerActionKey(identifier)) === '1') {
-+            hasSeenPowerActionSinceMount.current = true;
-+        }
-+
 +        if (
 +            hasFirstStartPopup
-+            && (runtimeStatus === 'starting' || runtimeStatus === 'running')
-+            && (hasSeenPowerActionSinceMount.current || localStorage.getItem(powerActionKey(identifier)) === '1')
++            && runtimeStatus === 'starting'
++            && localStorage.getItem(powerActionKey(identifier)) === '1'
 +            && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1'
 +        ) {
 +            setActivePopup((current) => current ?? 'on_first_start');
@@ -588,41 +574,18 @@ index 0000000..e5c41f1
 +        }
 +
 +        const identifier = String(serverIdentifier);
-+        const firstStartPopupStorageKey = storageKey(identifier, 'on_first_start');
-+
 +        const handleInstallStarted = () => {
 +            // Reinstall should count as a fresh first run.
-+            localStorage.removeItem(firstStartPopupStorageKey);
++            localStorage.removeItem(storageKey(identifier, 'on_first_start'));
 +            localStorage.removeItem(powerActionKey(identifier));
-+            hasSeenNonRunningSinceMount.current = true;
-+            hasSeenPowerActionSinceMount.current = false;
-+        };
-+
-+        const handleServerStatus = (status: string) => {
-+            if (status === 'offline') {
-+                hasSeenNonRunningSinceMount.current = true;
-+                return;
-+            }
-+
-+            if (
-+                !hasFirstStartPopup
-+                || activePopup
-+                || !(hasSeenPowerActionSinceMount.current || localStorage.getItem(powerActionKey(identifier)) === '1')
-+                || localStorage.getItem(firstStartPopupStorageKey) === '1'
-+            ) {
-+                return;
-+            }
-+            setActivePopup('on_first_start');
 +        };
 +
 +        instance.addListener(SocketEvent.INSTALL_STARTED, handleInstallStarted);
-+        instance.addListener(SocketEvent.STATUS, handleServerStatus);
 +
 +        return () => {
 +            instance.removeListener(SocketEvent.INSTALL_STARTED, handleInstallStarted);
-+            instance.removeListener(SocketEvent.STATUS, handleServerStatus);
 +        };
-+    }, [connected, instance, serverIdentifier, hasFirstStartPopup, activePopup]);
++    }, [connected, instance, serverIdentifier]);
 +
 +    useEffect(() => {
 +        if (!connected || !instance || !hasConsoleErrorPopup) {
@@ -657,14 +620,13 @@ index 0000000..e5c41f1
 +    const dismiss = () => {
 +        localStorage.setItem(storageKey(String(serverIdentifier), activePopup), '1');
 +        localStorage.removeItem(powerActionKey(String(serverIdentifier)));
-+        hasSeenPowerActionSinceMount.current = false;
 +        setActivePopup(null);
 +    };
 +
 +    return (
 +        <Modal visible={true} onDismissed={dismiss} closeOnBackground={false}>
 +            <h2 css={tw`text-2xl mb-4 text-neutral-100`}>{title || 'Welcome'}</h2>
-+            <p css={tw`text-neutral-200 whitespace-pre-line`}>{content || ''}</p>
++            <p css={tw`text-neutral-200 whitespace-pre-line`}>{(content || '').split(/(https?:\/\/[^\s]+)/gi).map((part, index) => (/^https?:\/\//i.test(part) ? <a key={index} href={part} target="_blank" rel="noopener noreferrer" css={tw`text-blue-300 underline break-all hover:text-blue-200`}>{part}</a> : part))}</p>
 +            <div css={tw`mt-8 sm:flex items-center justify-end`}>
 +                <Button onClick={dismiss} css={tw`w-full sm:w-auto`}>
 +                    Continue
