@@ -507,8 +507,8 @@ new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,143 @@
-+import React, { useEffect, useMemo, useState } from 'react';
+@@ -0,0 +1,145 @@
++import React, { useEffect, useMemo, useRef, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
 +import tw from 'twin.macro';
@@ -542,15 +542,8 @@ index 0000000..e5c41f1
 +        [errorTitle, errorContent]
 +    );
 +
-+    const [activePopup, setActivePopup] = useState<PopupMode | null>(() => {
-+        const identifier = String(serverIdentifier);
-+
-+        if (hasFirstStartPopup && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1') {
-+            return 'on_first_start';
-+        }
-+
-+        return null;
-+    });
++    const [activePopup, setActivePopup] = useState<PopupMode | null>(null);
++    const hasSeenNonRunningSinceMount = useRef(runtimeStatus !== 'running');
 +
 +    useEffect(() => {
 +        if (!hasFirstStartPopup) {
@@ -561,11 +554,17 @@ index 0000000..e5c41f1
 +            localStorage.removeItem(storageKey(String(serverIdentifier), 'on_first_start'));
 +        }
 +    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
+
++    useEffect(() => {
++        if (runtimeStatus && runtimeStatus !== 'running') {
++            hasSeenNonRunningSinceMount.current = true;
++        }
++    }, [runtimeStatus]);
 +
 +    useEffect(() => {
 +        const identifier = String(serverIdentifier);
 +
-+        if (hasFirstStartPopup && runtimeStatus === 'running' && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1') {
++        if (hasFirstStartPopup && runtimeStatus === 'running' && hasSeenNonRunningSinceMount.current && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1') {
 +            setActivePopup((current) => current ?? 'on_first_start');
 +        }
 +    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
@@ -581,16 +580,19 @@ index 0000000..e5c41f1
 +        const handleInstallStarted = () => {
 +            // Reinstall should count as a fresh first run.
 +            localStorage.removeItem(firstStartPopupStorageKey);
++            hasSeenNonRunningSinceMount.current = true;
 +        };
 +
 +        const handleServerStatus = (status: string) => {
-+            if (!hasFirstStartPopup || activePopup || localStorage.getItem(firstStartPopupStorageKey) === '1') {
++            if (status !== 'running') {
++                hasSeenNonRunningSinceMount.current = true;
 +                return;
 +            }
 +
-+            if (status === 'running') {
-+                setActivePopup('on_first_start');
++            if (!hasFirstStartPopup || activePopup || !hasSeenNonRunningSinceMount.current || localStorage.getItem(firstStartPopupStorageKey) === '1') {
++                return;
 +            }
++            setActivePopup('on_first_start');
 +        };
 +
 +        instance.addListener(SocketEvent.INSTALL_STARTED, handleInstallStarted);
