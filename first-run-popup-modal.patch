@@ -507,7 +507,7 @@ new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,169 @@
 +import React, { useEffect, useMemo, useRef, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
@@ -567,6 +567,10 @@ index 0000000..e5c41f1
 +
 +    useEffect(() => {
 +        const identifier = String(serverIdentifier);
++
++        if (localStorage.getItem(powerActionKey(identifier)) === '1') {
++            hasSeenPowerActionSinceMount.current = true;
++        }
 +
 +        if (
 +            hasFirstStartPopup
