@@ -525,7 +525,7 @@ index 0000000..e5c41f1
 +
 +const FirstRunPopupFeature = () => {
 +    const serverIdentifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
-+    const serverStatus = ServerContext.useStoreState((state) => state.server.data!.status);
++    const runtimeStatus = ServerContext.useStoreState((state) => state.status.value);
 +    const firstStartTitle = ServerContext.useStoreState((state) => state.server.data!.popupOnFirstStartTitle);
 +    const firstStartContent = ServerContext.useStoreState((state) => state.server.data!.popupOnFirstStartContent);
 +    const errorTitle = ServerContext.useStoreState((state) => state.server.data!.popupOnConsoleErrorTitle);
@@ -557,18 +557,18 @@ index 0000000..e5c41f1
 +            return;
 +        }
 +
-+        if (serverStatus === 'installing' || serverStatus === 'install_failed' || serverStatus === 'reinstall_failed') {
++        if (runtimeStatus === 'installing' || runtimeStatus === 'install_failed' || runtimeStatus === 'reinstall_failed') {
 +            localStorage.removeItem(storageKey(String(serverIdentifier), 'on_first_start'));
 +        }
-+    }, [serverIdentifier, serverStatus, hasFirstStartPopup]);
++    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
 +
 +    useEffect(() => {
 +        const identifier = String(serverIdentifier);
 +
-+        if (hasFirstStartPopup && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1') {
++        if (hasFirstStartPopup && runtimeStatus === 'running' && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1') {
 +            setActivePopup((current) => current ?? 'on_first_start');
 +        }
-+    }, [serverIdentifier, hasFirstStartPopup]);
++    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
 +
 +    useEffect(() => {
 +        if (!connected || !instance) {
