@@ -738,6 +738,7 @@ index 55c59bc..fbc6a92 100644
       const onButtonClick = (
            action: PowerAction | 'kill-confirmed',
            e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+     ): void => {
 @@ -26,6 +34,7 @@ export default ({ className }: PowerButtonProps) => {
  
            if (instance) {
