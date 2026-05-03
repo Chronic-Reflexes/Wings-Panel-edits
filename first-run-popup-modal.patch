@@ -507,7 +507,7 @@ new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-+@@ -0,0 +1,133 @@
+@@ -0,0 +1,128 @@
 +import React, { useEffect, useMemo, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
