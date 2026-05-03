@@ -732,16 +732,10 @@ index d9bdf07..32ed161 100644
   */
  const features: Record<string, ComponentType> = {
      eula: lazy(() => import('@feature/eula/EulaModalFeature')),
-+    popup_modals: lazy(() => import('@feature/FirstRunPopupFeature')),
++    popup_modals: FirstRunPopupFeature,
      java_version: lazy(() => import('@feature/JavaVersionModalFeature')),
      gsl_token: lazy(() => import('@feature/GSLTokenModalFeature')),
      pid_limit: lazy(() => import('@feature/PIDLimitModalFeature')),
-@@ -15,4 +16,5 @@ const features: Record<string, ComponentType> = {
-     hytale_oauth: lazy(() => import('@feature/HytaleOauthRequireFeature')),
- };
-+features.popup_modals = FirstRunPopupFeature;
- 
- export default features;
 diff --git a/resources/views/admin/eggs/popup.blade.php b/resources/views/admin/eggs/popup.blade.php
 new file mode 100644
 index 0000000..ec95c1b
