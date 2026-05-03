@@ -689,12 +689,14 @@ index 28ca553..3dbeb6d 100644
      const setServerFromState = ServerContext.useStoreActions((actions) => actions.server.setServerFromState);
  
      useWebsocketEvent(SocketEvent.BACKUP_RESTORE_COMPLETED, () => {
-@@ -24,6 +25,8 @@ const InstallListener = () => {
+@@ -24,6 +25,10 @@ const InstallListener = () => {
      // When we see the install started event immediately update the state to indicate such so that the
      // screens automatically update.
      useWebsocketEvent(SocketEvent.INSTALL_STARTED, () => {
 +        const firstStartPopupStorageKey = `ptero:popup-modal:on_first_start:${identifier}`;
++        const powerActionStorageKey = `ptero:popup-modal:power_action:${identifier}`;
 +        localStorage.removeItem(firstStartPopupStorageKey);
++        localStorage.removeItem(powerActionStorageKey);
          setServerFromState((s) => ({ ...s, status: 'installing' }));
      });
  
@@ -702,7 +704,7 @@ diff --git a/resources/scripts/components/server/settings/ReinstallServerBox.tsx
 index ff08007..f0d5b5f 100644
 --- a/resources/scripts/components/server/settings/ReinstallServerBox.tsx
 +++ b/resources/scripts/components/server/settings/ReinstallServerBox.tsx
-@@ -10,12 +10,15 @@ import { Dialog } from '@/components/elements/dialog';
+@@ -10,12 +10,17 @@ import { Dialog } from '@/components/elements/dialog';
  
  export default () => {
      const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
@@ -713,9 +715,11 @@ index ff08007..f0d5b5f 100644
      const reinstall = () => {
          clearFlashes('settings');
 +        const popupStorageKey = `ptero:popup-modal:on_first_start:${identifier}`;
++        const powerActionStorageKey = `ptero:popup-modal:power_action:${identifier}`;
          reinstallServer(uuid)
              .then(() => {
 +                localStorage.removeItem(popupStorageKey);
++                localStorage.removeItem(powerActionStorageKey);
                  addFlash({
                      key: 'settings',
                      type: 'success',
