@@ -119,7 +119,7 @@ diff --git a/app/Services/Servers/ServerCreationService.php b/app/Services/Serve
 diff --git a/app/Services/Servers/ReinstallServerService.php b/app/Services/Servers/ReinstallServerService.php
 --- a/app/Services/Servers/ReinstallServerService.php
 +++ b/app/Services/Servers/ReinstallServerService.php
-@@ -24,6 +24,12 @@
+@@ -24,8 +24,14 @@
       */
      public function handle(Server $server): Server
      {
@@ -132,7 +132,7 @@ diff --git a/app/Services/Servers/ReinstallServerService.php b/app/Services/Serv
          return $this->connection->transaction(function () use ($server) {
              $server->fill(['status' => Server::STATUS_INSTALLING])->save();
  
- 
+             $this->daemonServerRepository->setServer($server)->reinstall();
 diff --git a/database/migrations/2022_04_03_151827_add_auto_mount_to_mounts_table.php b/database/migrations/2022_04_03_151827_add_auto_mount_to_mounts_table.php
 new file mode 100644
 --- /dev/null
