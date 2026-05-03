@@ -507,7 +507,7 @@ new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,129 @@
 +import React, { useEffect, useMemo, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
@@ -636,6 +636,7 @@ index 0000000..e5c41f1
 +    );
 +};
 +
++export { FirstRunPopupFeature };
 +export default FirstRunPopupFeature;
 diff --git a/resources/scripts/components/server/InstallListener.tsx b/resources/scripts/components/server/InstallListener.tsx
 index 28ca553..3dbeb6d 100644
@@ -726,7 +727,7 @@ index d9bdf07..32ed161 100644
   */
  const features: Record<string, ComponentType> = {
      eula: lazy(() => import('@feature/eula/EulaModalFeature')),
-+    popup_modals: lazy(() => import('@feature/FirstRunPopupFeature').then((module) => ({ default: module.default || (() => null) }))),
++    popup_modals: lazy(() => import('@feature/FirstRunPopupFeature').then((module) => ({ default: module.default || module.FirstRunPopupFeature || (() => null) }))),
      java_version: lazy(() => import('@feature/JavaVersionModalFeature')),
      gsl_token: lazy(() => import('@feature/GSLTokenModalFeature')),
      pid_limit: lazy(() => import('@feature/PIDLimitModalFeature')),
