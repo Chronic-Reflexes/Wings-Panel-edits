@@ -507,7 +507,7 @@ new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,167 @@
 +import React, { useEffect, useMemo, useRef, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
@@ -575,7 +575,6 @@ index 0000000..e5c41f1
 +        if (
 +            hasFirstStartPopup
 +            && (runtimeStatus === 'starting' || runtimeStatus === 'running')
-+            && hasSeenNonRunningSinceMount.current
 +            && (hasSeenPowerActionSinceMount.current || localStorage.getItem(powerActionKey(identifier)) === '1')
 +            && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1'
 +        ) {
@@ -608,7 +607,6 @@ index 0000000..e5c41f1
 +            if (
 +                !hasFirstStartPopup
 +                || activePopup
-+                || !hasSeenNonRunningSinceMount.current
 +                || !(hasSeenPowerActionSinceMount.current || localStorage.getItem(powerActionKey(identifier)) === '1')
 +                || localStorage.getItem(firstStartPopupStorageKey) === '1'
 +            ) {
