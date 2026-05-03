@@ -722,17 +722,11 @@ diff --git a/resources/scripts/components/server/features/index.ts b/resources/s
 index d9bdf07..32ed161 100644
 --- a/resources/scripts/components/server/features/index.ts
 +++ b/resources/scripts/components/server/features/index.ts
-@@ -1,4 +1,5 @@
- import { ComponentType, lazy } from 'react';
-+import FirstRunPopupFeature from '@feature/FirstRunPopupFeature';
- 
- /**
-  * Custom features should be registered here as lazy components so that they do
 @@ -8,6 +8,7 @@ import { ComponentType, lazy } from 'react';
   */
  const features: Record<string, ComponentType> = {
      eula: lazy(() => import('@feature/eula/EulaModalFeature')),
-+    popup_modals: FirstRunPopupFeature,
++    popup_modals: lazy(() => import('@feature/FirstRunPopupFeature').then((module) => ({ default: module.default || (() => null) }))),
      java_version: lazy(() => import('@feature/JavaVersionModalFeature')),
      gsl_token: lazy(() => import('@feature/GSLTokenModalFeature')),
      pid_limit: lazy(() => import('@feature/PIDLimitModalFeature')),
