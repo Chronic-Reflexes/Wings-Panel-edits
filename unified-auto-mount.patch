@@ -46,15 +46,6 @@ diff --git a/app/Models/Mount.php b/app/Models/Mount.php
 +        'auto_mount' => 'sometimes|boolean',
      ];
  
-     /**
-@@ -103,6 +107,8 @@
-      */
-     public static $invalidTargetPaths = [
-         '/home/container',
-+        '/mnt/server',
-+        '/mnt/install',
-     ];
- 
 diff --git a/app/Providers/EventServiceProvider.php b/app/Providers/EventServiceProvider.php
 --- a/app/Providers/EventServiceProvider.php
 +++ b/app/Providers/EventServiceProvider.php
