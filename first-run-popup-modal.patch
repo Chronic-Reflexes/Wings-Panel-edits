@@ -377,6 +377,76 @@ index 0000000..a78a01c
 +        });
 +    }
 +}
+diff --git a/database/migrations/2026_05_03_000001_add_popup_modal_compat_columns_to_eggs_table.php b/database/migrations/2026_05_03_000001_add_popup_modal_compat_columns_to_eggs_table.php
+new file mode 100644
+index 0000000..b595a1b
+--- /dev/null
++++ b/database/migrations/2026_05_03_000001_add_popup_modal_compat_columns_to_eggs_table.php
+@@ -0,0 +1,62 @@
++<?php
++
++use Illuminate\Support\Facades\DB;
++use Illuminate\Support\Facades\Schema;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Database\Migrations\Migration;
++
++class AddPopupModalCompatColumnsToEggsTable extends Migration
++{
++    /**
++     * Run the migrations.
++     */
++    public function up(): void
++    {
++        Schema::table('eggs', function (Blueprint $table) {
++            if (!Schema::hasColumn('eggs', 'popup_on_first_start_title')) {
++                $table->string('popup_on_first_start_title')->nullable()->after('features');
++            }
++
++            if (!Schema::hasColumn('eggs', 'popup_on_first_start_content')) {
++                $table->text('popup_on_first_start_content')->nullable()->after('popup_on_first_start_title');
++            }
++
++            if (!Schema::hasColumn('eggs', 'popup_on_console_error_title')) {
++                $table->string('popup_on_console_error_title')->nullable()->after('popup_on_first_start_content');
++            }
++
++            if (!Schema::hasColumn('eggs', 'popup_on_console_error_content')) {
++                $table->text('popup_on_console_error_content')->nullable()->after('popup_on_console_error_title');
++            }
++        });
++
++        // Backfill from the previous patch schema when those legacy columns exist.
++        if (Schema::hasColumn('eggs', 'first_run_popup_title')) {
++            DB::table('eggs')
++                ->whereNull('popup_on_first_start_title')
++                ->update(['popup_on_first_start_title' => DB::raw('first_run_popup_title')]);
++        }
++
++        if (Schema::hasColumn('eggs', 'first_run_popup_content')) {
++            DB::table('eggs')
++                ->whereNull('popup_on_first_start_content')
++                ->update(['popup_on_first_start_content' => DB::raw('first_run_popup_content')]);
++        }
++    }
++
++    /**
++     * Reverse the migrations.
++     */
++    public function down(): void
++    {
++        Schema::table('eggs', function (Blueprint $table) {
++            $drop = [];
++            foreach (['popup_on_console_error_content', 'popup_on_console_error_title', 'popup_on_first_start_content', 'popup_on_first_start_title'] as $column) {
++                if (Schema::hasColumn('eggs', $column)) {
++                    $drop[] = $column;
++                }
++            }
++            if (!empty($drop)) {
++                $table->dropColumn($drop);
++            }
++        });
++    }
++}
 diff --git a/resources/scripts/api/server/getServer.ts b/resources/scripts/api/server/getServer.ts
 index 16743ef..0c48c69 100644
 --- a/resources/scripts/api/server/getServer.ts
