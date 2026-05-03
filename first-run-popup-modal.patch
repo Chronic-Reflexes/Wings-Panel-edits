@@ -651,6 +651,27 @@ index 0000000..e5c41f1
 +};
 +
 +export default FirstRunPopupFeature;
+diff --git a/resources/scripts/components/server/InstallListener.tsx b/resources/scripts/components/server/InstallListener.tsx
+index 28ca553..3dbeb6d 100644
+--- a/resources/scripts/components/server/InstallListener.tsx
++++ b/resources/scripts/components/server/InstallListener.tsx
+@@ -7,6 +7,7 @@ import { getDirectorySwrKey } from '@/plugins/useFileManagerSwr';
+ const InstallListener = () => {
+     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
+     const getServer = ServerContext.useStoreActions((actions) => actions.server.getServer);
++    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
+     const setServerFromState = ServerContext.useStoreActions((actions) => actions.server.setServerFromState);
+ 
+     useWebsocketEvent(SocketEvent.BACKUP_RESTORE_COMPLETED, () => {
+@@ -24,6 +25,8 @@ const InstallListener = () => {
+     // When we see the install started event immediately update the state to indicate such so that the
+     // screens automatically update.
+     useWebsocketEvent(SocketEvent.INSTALL_STARTED, () => {
++        const firstStartPopupStorageKey = `ptero:popup-modal:on_first_start:${identifier}`;
++        localStorage.removeItem(firstStartPopupStorageKey);
+         setServerFromState((s) => ({ ...s, status: 'installing' }));
+     });
+ 
 diff --git a/resources/scripts/components/server/features/index.ts b/resources/scripts/components/server/features/index.ts
 index d9bdf07..32ed161 100644
 --- a/resources/scripts/components/server/features/index.ts
