@@ -576,7 +576,7 @@ index 0000000..e5c41f1
 +            hasFirstStartPopup
 +            && runtimeStatus === 'running'
 +            && hasSeenNonRunningSinceMount.current
-+            && hasSeenPowerActionSinceMount.current
++            && (hasSeenPowerActionSinceMount.current || localStorage.getItem(powerActionKey(identifier)) === '1')
 +            && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1'
 +        ) {
 +            setActivePopup((current) => current ?? 'on_first_start');
@@ -609,7 +609,7 @@ index 0000000..e5c41f1
 +                !hasFirstStartPopup
 +                || activePopup
 +                || !hasSeenNonRunningSinceMount.current
-+                || !hasSeenPowerActionSinceMount.current
++                || !(hasSeenPowerActionSinceMount.current || localStorage.getItem(powerActionKey(identifier)) === '1')
 +                || localStorage.getItem(firstStartPopupStorageKey) === '1'
 +            ) {
 +                return;
