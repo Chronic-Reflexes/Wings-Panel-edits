@@ -507,7 +507,7 @@ new file mode 100644
 index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,145 @@
+@@ -0,0 +1,165 @@
 +import React, { useEffect, useMemo, useRef, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
@@ -518,6 +518,7 @@ index 0000000..e5c41f1
 +type PopupMode = 'on_first_start' | 'on_console_error';
 +
 +const storageKey = (identifier: string, mode: PopupMode) => `ptero:popup-modal:${mode}:${identifier}`;
++const powerActionKey = (identifier: string) => `ptero:popup-modal:power_action:${identifier}`;
 +
 +const hasValue = (value: string | null) => Boolean(value && value.trim().length > 0);
 +
@@ -544,6 +545,7 @@ index 0000000..e5c41f1
 +
 +    const [activePopup, setActivePopup] = useState<PopupMode | null>(null);
 +    const hasSeenNonRunningSinceMount = useRef(runtimeStatus !== 'running');
++    const hasSeenPowerActionSinceMount = useRef(localStorage.getItem(powerActionKey(String(serverIdentifier))) === '1');
 +
 +    useEffect(() => {
 +        if (!hasFirstStartPopup) {
@@ -552,6 +554,8 @@ index 0000000..e5c41f1
 +
 +        if (runtimeStatus === 'installing' || runtimeStatus === 'install_failed' || runtimeStatus === 'reinstall_failed') {
 +            localStorage.removeItem(storageKey(String(serverIdentifier), 'on_first_start'));
++            localStorage.removeItem(powerActionKey(String(serverIdentifier)));
++            hasSeenPowerActionSinceMount.current = false;
 +        }
 +    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
 +
@@ -564,7 +568,13 @@ index 0000000..e5c41f1
 +    useEffect(() => {
 +        const identifier = String(serverIdentifier);
 +
-+        if (hasFirstStartPopup && runtimeStatus === 'running' && hasSeenNonRunningSinceMount.current && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1') {
++        if (
++            hasFirstStartPopup
++            && runtimeStatus === 'running'
++            && hasSeenNonRunningSinceMount.current
++            && hasSeenPowerActionSinceMount.current
++            && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1'
++        ) {
 +            setActivePopup((current) => current ?? 'on_first_start');
 +        }
 +    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
@@ -580,7 +590,9 @@ index 0000000..e5c41f1
 +        const handleInstallStarted = () => {
 +            // Reinstall should count as a fresh first run.
 +            localStorage.removeItem(firstStartPopupStorageKey);
++            localStorage.removeItem(powerActionKey(identifier));
 +            hasSeenNonRunningSinceMount.current = true;
++            hasSeenPowerActionSinceMount.current = false;
 +        };
 +
 +        const handleServerStatus = (status: string) => {
@@ -589,7 +601,13 @@ index 0000000..e5c41f1
 +                return;
 +            }
 +
-+            if (!hasFirstStartPopup || activePopup || !hasSeenNonRunningSinceMount.current || localStorage.getItem(firstStartPopupStorageKey) === '1') {
++            if (
++                !hasFirstStartPopup
++                || activePopup
++                || !hasSeenNonRunningSinceMount.current
++                || !hasSeenPowerActionSinceMount.current
++                || localStorage.getItem(firstStartPopupStorageKey) === '1'
++            ) {
 +                return;
 +            }
 +            setActivePopup('on_first_start');
@@ -636,6 +654,8 @@ index 0000000..e5c41f1
 +
 +    const dismiss = () => {
 +        localStorage.setItem(storageKey(String(serverIdentifier), activePopup), '1');
++        localStorage.removeItem(powerActionKey(String(serverIdentifier)));
++        hasSeenPowerActionSinceMount.current = false;
 +        setActivePopup(null);
 +    };
 +
@@ -695,6 +715,37 @@ index ff08007..f0d5b5f 100644
                  addFlash({
                      key: 'settings',
                      type: 'success',
+
+diff --git a/resources/scripts/components/server/console/PowerButtons.tsx b/resources/scripts/components/server/console/PowerButtons.tsx
+index 55c59bc..fbc6a92 100644
+--- a/resources/scripts/components/server/console/PowerButtons.tsx
++++ b/resources/scripts/components/server/console/PowerButtons.tsx
+@@ -11,10 +11,18 @@ interface PowerButtonProps {
+ export default ({ className }: PowerButtonProps) => {
+      const [open, setOpen] = useState(false);
+      const status = ServerContext.useStoreState((state) => state.status.value);
++    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
+      const instance = ServerContext.useStoreState((state) => state.socket.instance);
+ 
+      const killable = status === 'stopping';
++    const markPowerAction = (action: PowerAction | 'kill-confirmed') => {
++        if (action === 'start' || action === 'restart') {
++            const key = `ptero:popup-modal:power_action:${identifier}`;
++            localStorage.setItem(key, '1');
++        }
++    };
++
+      const onButtonClick = (
+           action: PowerAction | 'kill-confirmed',
+           e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+@@ -26,6 +34,7 @@ export default ({ className }: PowerButtonProps) => {
+ 
+           if (instance) {
+                setOpen(false);
++            markPowerAction(action);
+                instance.send('set state', action === 'kill-confirmed' ? 'kill' : action);
+           }
+      };
 
 diff --git a/resources/scripts/components/server/features/index.ts b/resources/scripts/components/server/features/index.ts
 index d9bdf07..32ed161 100644
