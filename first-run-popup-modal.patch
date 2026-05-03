@@ -502,6 +502,27 @@ index 16743ef..0c48c69 100644
      limits: { ...data.limits },
      eggFeatures: data.egg_features || [],
      featureLimits: { ...data.feature_limits },
+diff --git a/resources/scripts/components/server/settings/ReinstallServerBox.tsx b/resources/scripts/components/server/settings/ReinstallServerBox.tsx
+index ff08007..f0d5b5f 100644
+--- a/resources/scripts/components/server/settings/ReinstallServerBox.tsx
++++ b/resources/scripts/components/server/settings/ReinstallServerBox.tsx
+@@ -10,12 +10,15 @@ import { Dialog } from '@/components/elements/dialog';
+
+ export default () => {
+      const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
++    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
+      const [modalVisible, setModalVisible] = useState(false);
+      const { addFlash, clearFlashes } = useStoreActions((actions: Actions<ApplicationStore>) => actions.flashes);
+
+      const reinstall = () => {
+           clearFlashes('settings');
++        const popupStorageKey = `ptero:popup-modal:on_first_start:${identifier}`;
+           reinstallServer(uuid)
+                .then(() => {
++                localStorage.removeItem(popupStorageKey);
+                     addFlash({
+                          key: 'settings',
+                          type: 'success',
 diff --git a/resources/scripts/components/server/features/FirstRunPopupFeature.tsx b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
 new file mode 100644
 index 0000000..e5c41f1
