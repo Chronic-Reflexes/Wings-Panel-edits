@@ -554,7 +554,7 @@ index 0000000..e5c41f1
 +            localStorage.removeItem(storageKey(String(serverIdentifier), 'on_first_start'));
 +        }
 +    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
-
++
 +    useEffect(() => {
 +        if (runtimeStatus && runtimeStatus !== 'running') {
 +            hasSeenNonRunningSinceMount.current = true;
