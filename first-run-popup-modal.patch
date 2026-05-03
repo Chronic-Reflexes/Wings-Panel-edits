@@ -20,14 +20,14 @@ diff --git a/routes/admin.php b/routes/admin.php
 diff --git a/app/Http/Controllers/Admin/Nests/EggController.php b/app/Http/Controllers/Admin/Nests/EggController.php
 --- a/app/Http/Controllers/Admin/Nests/EggController.php
 +++ b/app/Http/Controllers/Admin/Nests/EggController.php
-@@ -12,6 +12,7 @@ use Pterodactyl\Services\Eggs\EggUpdateService;
+@@ -12,5 +12,6 @@ use Pterodactyl\Services\Eggs\EggUpdateService;
  use Pterodactyl\Services\Eggs\EggCreationService;
  use Pterodactyl\Services\Eggs\EggDeletionService;
  use Pterodactyl\Http\Requests\Admin\Egg\EggFormRequest;
 +use Pterodactyl\Http\Requests\Admin\Egg\EggPopupFormRequest;
  use Pterodactyl\Contracts\Repository\EggRepositoryInterface;
  use Pterodactyl\Contracts\Repository\NestRepositoryInterface;
-@@ -77,6 +78,14 @@ class EggController extends Controller
+@@ -77,2 +78,10 @@ class EggController extends Controller
          ]);
      }
 +
@@ -38,7 +38,7 @@ diff --git a/app/Http/Controllers/Admin/Nests/EggController.php b/app/Http/Contr
 +    {
 +        return view('admin.eggs.popup', ['egg' => $egg]);
 +    }
-@@ -96,6 +105,21 @@ class EggController extends Controller
+@@ -96,2 +105,17 @@ class EggController extends Controller
          return redirect()->route('admin.nests.egg.view', $egg->id);
      }
 +
@@ -62,7 +62,7 @@ diff --git a/app/Http/Controllers/Admin/Nests/EggController.php b/app/Http/Contr
 diff --git a/app/Http/Requests/Admin/Egg/EggFormRequest.php b/app/Http/Requests/Admin/Egg/EggFormRequest.php
 --- a/app/Http/Requests/Admin/Egg/EggFormRequest.php
 +++ b/app/Http/Requests/Admin/Egg/EggFormRequest.php
-@@ -21,6 +21,8 @@ class EggFormRequest extends AdminFormRequest
+@@ -21,5 +21,7 @@ class EggFormRequest extends AdminFormRequest
              'config_stop' => 'required_without:config_from|nullable|string|max:191',
              'config_startup' => 'required_without:config_from|nullable|json',
              'config_logs' => 'required_without:config_from|nullable|json',
@@ -87,7 +87,7 @@ diff --git a/app/Http/Requests/Admin/Egg/EggPopupFormRequest.php b/app/Http/Requ
 new file mode 100644
 --- /dev/null
 +++ b/app/Http/Requests/Admin/Egg/EggPopupFormRequest.php
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,29 @@
 +<?php
 +
 +namespace Pterodactyl\Http\Requests\Admin\Egg;
@@ -121,7 +121,7 @@ diff --git a/database/migrations/2026_05_03_000000_add_first_run_popup_to_eggs_t
 new file mode 100644
 --- /dev/null
 +++ b/database/migrations/2026_05_03_000000_add_first_run_popup_to_eggs_table.php
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,29 @@
 +<?php
 +
 +use Illuminate\Support\Facades\Schema;
@@ -154,7 +154,7 @@ new file mode 100644
 diff --git a/app/Models/Egg.php b/app/Models/Egg.php
 --- a/app/Models/Egg.php
 +++ b/app/Models/Egg.php
-@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
+@@ -16,5 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
   * @property string $name
   * @property string|null $description
   * @property array|null $features
@@ -189,7 +189,7 @@ diff --git a/app/Models/Egg.php b/app/Models/Egg.php
          'file_denylist' => null,
          'config_stop' => null,
          'config_startup' => null,
-@@ -255,6 +263,30 @@ class Egg extends Model implements Identifiable
+@@ -255,5 +263,29 @@ class Egg extends Model implements Identifiable
          return $this->configFrom->features;
      }
 +
@@ -301,7 +301,7 @@ diff --git a/resources/views/admin/eggs/popup.blade.php b/resources/views/admin/
 new file mode 100644
 --- /dev/null
 +++ b/resources/views/admin/eggs/popup.blade.php
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,72 @@
 +@extends('layouts.admin')
 +
 +@section('title')
@@ -377,7 +377,7 @@ new file mode 100644
 diff --git a/app/Transformers/Api/Client/ServerTransformer.php b/app/Transformers/Api/Client/ServerTransformer.php
 --- a/app/Transformers/Api/Client/ServerTransformer.php
 +++ b/app/Transformers/Api/Client/ServerTransformer.php
-@@ -35,6 +35,14 @@ class ServerTransformer extends BaseClientTransformer
+@@ -35,4 +35,12 @@ class ServerTransformer extends BaseClientTransformer
          $service = Container::getInstance()->make(StartupCommandService::class);
  
          $user = $this->request->user();
@@ -390,7 +390,7 @@ diff --git a/app/Transformers/Api/Client/ServerTransformer.php b/app/Transformer
 +        }
 +
          return [
-@@ -67,7 +75,10 @@ class ServerTransformer extends BaseClientTransformer
+@@ -67,7 +75,9 @@ class ServerTransformer extends BaseClientTransformer
              ],
              'invocation' => $service->handle($server, !$user->can(Permission::ACTION_STARTUP_READ, $server)),
              'docker_image' => $server->image,
@@ -437,7 +437,7 @@ diff --git a/resources/scripts/components/server/features/FirstRunPopupFeature.t
 new file mode 100644
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,48 @@
 +import React, { useMemo, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
