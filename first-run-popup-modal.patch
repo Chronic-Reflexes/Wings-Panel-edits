@@ -551,7 +551,7 @@ index 0000000..e5c41f1
 +
 +        return null;
 +    });
-
++
 +    useEffect(() => {
 +        if (!hasFirstStartPopup) {
 +            return;
