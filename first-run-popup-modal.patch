@@ -504,10 +504,10 @@ index 16743ef..0c48c69 100644
      featureLimits: { ...data.feature_limits },
 diff --git a/resources/scripts/components/server/features/FirstRunPopupFeature.tsx b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
 new file mode 100644
-index 0000000..599e583
+index 0000000..e5c41f1
 --- /dev/null
 +++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,121 @@
 +import React, { useEffect, useMemo, useState } from 'react';
 +import { ServerContext } from '@/state/server';
 +import Modal from '@/components/elements/Modal';
@@ -550,6 +550,46 @@ index 0000000..599e583
 +
 +        return null;
 +    });
++
++    useEffect(() => {
++        const identifier = String(serverIdentifier);
++
++        if (hasFirstStartPopup && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1') {
++            setActivePopup((current) => current ?? 'on_first_start');
++        }
++    }, [serverIdentifier, hasFirstStartPopup]);
++
++    useEffect(() => {
++        if (!connected || !instance) {
++            return;
++        }
++
++        const identifier = String(serverIdentifier);
++        const firstStartPopupStorageKey = storageKey(identifier, 'on_first_start');
++
++        const handleInstallStarted = () => {
++            // Reinstall should count as a fresh first run.
++            localStorage.removeItem(firstStartPopupStorageKey);
++        };
++
++        const handleServerStatus = (status: string) => {
++            if (!hasFirstStartPopup || activePopup || localStorage.getItem(firstStartPopupStorageKey) === '1') {
++                return;
++            }
++
++            if (status === 'running') {
++                setActivePopup('on_first_start');
++            }
++        };
++
++        instance.addListener(SocketEvent.INSTALL_STARTED, handleInstallStarted);
++        instance.addListener(SocketEvent.STATUS, handleServerStatus);
++
++        return () => {
++            instance.removeListener(SocketEvent.INSTALL_STARTED, handleInstallStarted);
++            instance.removeListener(SocketEvent.STATUS, handleServerStatus);
++        };
++    }, [connected, instance, serverIdentifier, hasFirstStartPopup, activePopup]);
 +
 +    useEffect(() => {
 +        if (!connected || !instance || !hasConsoleErrorPopup) {
