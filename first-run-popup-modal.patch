@@ -21,7 +21,7 @@ diff --git a/app/Http/Controllers/Admin/Nests/EggPopupController.php b/app/Http/
 new file mode 100644
 --- /dev/null
 +++ b/app/Http/Controllers/Admin/Nests/EggPopupController.php
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,46 @@
 +<?php
 +
 +namespace Pterodactyl\Http\Controllers\Admin\Nests;
@@ -47,7 +47,12 @@ new file mode 100644
 +     */
 +    public function view(Egg $egg): View
 +    {
-+        return view('admin.eggs.popup', ['egg' => $egg]);
++        $eggs = $egg->nest->eggs()->orderBy('name')->get(['id', 'name']);
++
++        return view('admin.eggs.popup', [
++            'egg' => $egg,
++            'eggs' => $eggs,
++        ]);
 +    }
 +
 +    /**
@@ -68,9 +73,7 @@ new file mode 100644
 diff --git a/app/Http/Requests/Admin/Egg/EggFormRequest.php b/app/Http/Requests/Admin/Egg/EggFormRequest.php
 --- a/app/Http/Requests/Admin/Egg/EggFormRequest.php
 +++ b/app/Http/Requests/Admin/Egg/EggFormRequest.php
-@@ -21,5 +21,7 @@ class EggFormRequest extends AdminFormRequest
-             'config_stop' => 'required_without:config_from|nullable|string|max:191',
-             'config_startup' => 'required_without:config_from|nullable|json',
+@@ -23,3 +23,5 @@ class EggFormRequest extends AdminFormRequest
              'config_logs' => 'required_without:config_from|nullable|json',
              'config_files' => 'required_without:config_from|nullable|json',
 +            'first_run_popup_title' => 'nullable|string|max:191',
@@ -294,7 +297,7 @@ diff --git a/resources/views/admin/eggs/popup.blade.php b/resources/views/admin/
 new file mode 100644
 --- /dev/null
 +++ b/resources/views/admin/eggs/popup.blade.php
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,86 @@
 +@extends('layouts.admin')
 +
 +@section('title')
@@ -333,17 +336,38 @@ new file mode 100644
 +                    <h3 class="box-title">First Run Popup</h3>
 +                </div>
 +                <div class="box-body">
-+                    <div class="form-group">
-+                        <label for="pFirstRunPopupTitle" class="control-label">Title</label>
-+                        <input
-+                            type="text"
-+                            id="pFirstRunPopupTitle"
-+                            name="first_run_popup_title"
-+                            class="form-control"
-+                            value="{{ old('first_run_popup_title', $egg->first_run_popup_title) }}"
-+                            maxlength="191"
-+                        />
-+                        <p class="text-muted small">Shown as the heading of the first-time popup modal.</p>
++                    <div class="row">
++                        <div class="col-md-8">
++                            <div class="form-group">
++                                <label for="pFirstRunPopupTitle" class="control-label">Title</label>
++                                <input
++                                    type="text"
++                                    id="pFirstRunPopupTitle"
++                                    name="first_run_popup_title"
++                                    class="form-control"
++                                    value="{{ old('first_run_popup_title', $egg->first_run_popup_title) }}"
++                                    maxlength="191"
++                                />
++                                <p class="text-muted small">Shown as the heading of the first-time popup modal.</p>
++                            </div>
++                        </div>
++                        <div class="col-md-4">
++                            <div class="form-group">
++                                <label for="pPopupEggSelector" class="control-label">Egg</label>
++                                <select
++                                    id="pPopupEggSelector"
++                                    class="form-control"
++                                    onchange="if (this.value) window.location.href = this.value;"
++                                >
++                                    @foreach($eggs as $popupEgg)
++                                        <option value="{{ route('admin.nests.egg.popup', $popupEgg->id) }}" @selected($popupEgg->id === $egg->id)>
++                                            {{ $popupEgg->name }}
++                                        </option>
++                                    @endforeach
++                                </select>
++                                <p class="text-muted small">Select which egg this popup should be configured for.</p>
++                            </div>
++                        </div>
 +                    </div>
 +                    <div class="form-group no-margin-bottom">
 +                        <label for="pFirstRunPopupContent" class="control-label">Content</label>
