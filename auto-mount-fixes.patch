@@ -1,0 +1,27 @@
+diff --git a/app/Listeners/RemoveMountsAfterInstall.php b/app/Listeners/RemoveMountsAfterInstall.php
+--- a/app/Listeners/RemoveMountsAfterInstall.php
++++ b/app/Listeners/RemoveMountsAfterInstall.php
+@@ -25,7 +25,7 @@
+     public function handle($event)
+     {
+-        $mounts = Mount::where('mount_on_install', '=', true)->get();
++        $mounts = Mount::where('mount_on_install', '=', true)->where('auto_mount', '=', false)->get();
+         foreach ($mounts as $mount) {
+             MountServer::where('mount_id', $mount->id)->where('server_id', $event->server->id)->delete();
+         }
+     }
+diff --git a/app/Services/Servers/ReinstallServerService.php b/app/Services/Servers/ReinstallServerService.php
+--- a/app/Services/Servers/ReinstallServerService.php
++++ b/app/Services/Servers/ReinstallServerService.php
+@@ -26,6 +26,12 @@
+     {
+         return $this->connection->transaction(function () use ($server) {
+             $server->fill(['status' => Server::STATUS_INSTALLING])->save();
++
++            $mounts = \Pterodactyl\Models\Mount::where('mount_on_install', true)->orWhere('auto_mount', true)->get();
++            foreach($mounts as $mount) {
++                \Illuminate\Support\Facades\DB::table('mount_server')
++                    ->updateOrInsert(['mount_id' => $mount->id, 'server_id' => $server->id]);
++            }
+ 
+             $this->daemonServerRepository->setServer($server)->reinstall();
