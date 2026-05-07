@@ -67,15 +67,16 @@ diff --git a/app/Services/Eggs/Variables/VariableCreationService.php b/app/Servi
 diff --git a/app/Services/Eggs/Variables/VariableUpdateService.php b/app/Services/Eggs/Variables/VariableUpdateService.php
 --- a/app/Services/Eggs/Variables/VariableUpdateService.php
 +++ b/app/Services/Eggs/Variables/VariableUpdateService.php
-@@ -65,6 +65,7 @@
+@@ -65,6 +65,8 @@
          }
  
          $options = array_get($data, 'options') ?? [];
-+        $dropdownOptions = array_get($data, 'dropdown_options') ?? [];
++        $hasDropdownOptions = array_key_exists('dropdown_options_present', $data);
++        $dropdownOptions = $hasDropdownOptions ? (array_get($data, 'dropdown_options') ?? []) : ($variable->dropdown_options ?? []);
  
          return $this->repository->withoutFreshModel()->update($variable->id, [
              'name' => $data['name'] ?? '',
-@@ -74,6 +75,7 @@
+@@ -74,6 +76,7 @@
              'user_viewable' => in_array('user_viewable', $options),
              'user_editable' => in_array('user_editable', $options),
              'rules' => $data['rules'] ?? '',
@@ -86,13 +87,14 @@ diff --git a/app/Services/Eggs/Variables/VariableUpdateService.php b/app/Service
 diff --git a/app/Transformers/Api/Client/EggVariableTransformer.php b/app/Transformers/Api/Client/EggVariableTransformer.php
 --- a/app/Transformers/Api/Client/EggVariableTransformer.php
 +++ b/app/Transformers/Api/Client/EggVariableTransformer.php
-@@ -27,5 +27,6 @@
+@@ -27,6 +27,7 @@
              'default_value' => $variable->default_value,
              'server_value' => $variable->server_value,
              'is_editable' => $variable->user_editable,
 +            'dropdown_options' => $variable->dropdown_options,
              'rules' => $variable->rules,
          ];
+     }
 diff --git a/database/migrations/2026_05_07_000000_add_egg_variable_dropdown_options.php b/database/migrations/2026_05_07_000000_add_egg_variable_dropdown_options.php
 new file mode 100644
 --- /dev/null
@@ -129,13 +131,32 @@ new file mode 100644
 diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
-@@ -131,13 +131,42 @@
+@@ -78,9 +78,18 @@
+                             <input type="text" name="rules" class="form-control" value="{{ $variable->rules }}" />
+                             <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
+                         </div>
++                        <input type="hidden" name="dropdown_options_present" value="1" />
++                        <div id="existingVariableDropdownItemsContainer-{{ $variable->id }}" class="hidden">
++                            @foreach(($variable->dropdown_options ?? []) as $dropdownOption)
++                                <div class="dropdown-option-item">
++                                    <input type="hidden" name="dropdown_options[]" class="dropdown-option-value" value="{{ $dropdownOption }}" />
++                                </div>
++                            @endforeach
++                        </div>
+                     </div>
+                     <div class="box-footer">
+                         {!! csrf_field() !!}
++                        <button class="btn btn-sm btn-info pull-right open-edit-dropdown-modal" type="button" data-toggle="modal" data-target="#editDropdownModal" data-variable-id="{{ $variable->id }}" style="margin-right: 5px;">Dropdowns</button>
+                         <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
+                         <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
+                     </div>
+@@ -131,13 +140,65 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
 +                    <div class="form-group">
 +                        <label class="control-label">Dropdown Variables</label>
-+                        <div id="newVariableDropdownItemsContainer"></div>
++                        <div id="newVariableDropdownItemsContainer" class="hidden"></div>
 +                        <p class="text-muted small">Manage dropdown variables in the popup below. These values will be included when this variable is created.</p>
 +                    </div>
                  </div>
@@ -170,23 +191,49 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +                <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
 +                <button type="button" class="btn btn-primary" id="saveCreateDropdownItems">Save</button>
 +            </div>
++        </div>
++    </div>
++</div>
++
++<div class="modal fade" id="editDropdownModal" tabindex="-1" role="dialog">
++    <div class="modal-dialog" role="document">
++        <div class="modal-content">
++            <div class="modal-header">
++                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
++                <h4 class="modal-title">Edit Dropdown Variables</h4>
++            </div>
++            <div class="modal-body">
++                <div class="form-group">
++                    <label class="control-label">Dropdown Variables</label>
++                    <div id="editDropdownItemsContainer"></div>
++                    <button type="button" class="btn btn-xs btn-default" id="addEditDropdownItem">Add Dropdown Variable</button>
++                    <p class="text-muted small">Manage the dropdown values used for this existing variable.</p>
++                </div>
++            </div>
++            <div class="modal-footer">
++                <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
++                <button type="button" class="btn btn-primary" id="saveEditDropdownItems">Save</button>
++            </div>
          </div>
      </div>
  </div>
-@@ -146,6 +175,44 @@
+@@ -146,6 +207,81 @@
  @section('footer-scripts')
      @parent
      <script>
++        function escapeDropdownValue(value = '') {
++            return $("<div/>").text(value).html();
++        }
++
 +        function buildDropdownModalItem(value = '') {
 +            return $("<div class=\"input-group dropdown-option-item mb-2\">")
-+                .append("<input type=\"text\" class=\"form-control create-dropdown-value\" value=\"" + $("<div/>").text(value).html() + "\" />")
++                .append("<input type=\"text\" class=\"form-control create-dropdown-value\" value=\"" + escapeDropdownValue(value) + "\" />")
 +                .append("<span class=\"input-group-btn\"><button type=\"button\" class=\"btn btn-danger remove-dropdown-item\">Remove</button></span>");
 +        }
 +
-+        function buildDropdownFormItem(value = '') {
-+            return $("<div class=\"input-group dropdown-option-item mb-2\">")
-+                .append("<input type=\"text\" name=\"dropdown_options[]\" class=\"form-control dropdown-option-value\" value=\"" + $("<div/>").text(value).html() + "\" />")
-+                .append("<span class=\"input-group-btn\"><button type=\"button\" class=\"btn btn-danger remove-dropdown-item\">Remove</button></span>");
++        function buildDropdownHiddenItem(value = '') {
++            return $("<div class=\"dropdown-option-item\">")
++                .append("<input type=\"hidden\" name=\"dropdown_options[]\" class=\"dropdown-option-value\" value=\"" + escapeDropdownValue(value) + "\" />");
 +        }
 +
 +        $("#createDropdownModal").on("show.bs.modal", function () {
@@ -205,13 +252,47 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +            $("#createDropdownItemsContainer .create-dropdown-value").each(function () {
 +                const value = $(this).val();
 +                if (value !== undefined && value !== null && value.toString().trim().length > 0) {
-+                    target.append(buildDropdownFormItem(value.toString()));
++                    target.append(buildDropdownHiddenItem(value.toString()));
 +                }
 +            });
 +            $("#createDropdownModal").modal('hide');
 +        });
 +
-+        $("#createDropdownItemsContainer, #newVariableDropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
++        $("#editDropdownModal").on("show.bs.modal", function (event) {
++            const button = $(event.relatedTarget);
++            const variableId = button.data("variableId");
++            const source = $("#existingVariableDropdownItemsContainer-" + variableId);
++            const target = $("#editDropdownItemsContainer").empty();
++
++            $(this).data("sourceContainer", source);
++
++            source.find(".dropdown-option-value").each(function () {
++                target.append(buildDropdownModalItem($(this).val()));
++            });
++        });
++
++        $("#addEditDropdownItem").on("click", function () {
++            $("#editDropdownItemsContainer").append(buildDropdownModalItem(''));
++        });
++
++        $("#saveEditDropdownItems").on("click", function () {
++            const source = $("#editDropdownModal").data("sourceContainer");
++            if (!source || !source.length) {
++                return;
++            }
++
++            source.empty();
++            $("#editDropdownItemsContainer .create-dropdown-value").each(function () {
++                const value = $(this).val();
++                if (value !== undefined && value !== null && value.toString().trim().length > 0) {
++                    source.append(buildDropdownHiddenItem(value.toString()));
++                }
++            });
++
++            $("#editDropdownModal").modal('hide');
++        });
++
++        $("#createDropdownItemsContainer, #editDropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
 +            $(this).closest(".dropdown-option-item").remove();
 +        });
 +
