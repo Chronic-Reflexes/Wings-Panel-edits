@@ -118,7 +118,7 @@ new file mode 100644
 +}
 
 diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
-index 4ab21b1..ee921e4 100644
+index 4ab21b1..345c255 100644
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
 @@ -31,7 +31,6 @@
@@ -137,29 +137,71 @@ index 4ab21b1..ee921e4 100644
                          <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
                          <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
                      </div>
-@@ -132,6 +132,12 @@
+@@ -132,17 +132,46 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
 +                    <div class="form-group">
-+                        <label class="control-label">Dropdown Items</label>
++                        <label class="control-label">Dropdown Variables</label>
 +                        <div id="newVariableDropdownItemsContainer"></div>
-+                        <button type="button" class="btn btn-xs btn-default" id="addNewVariableDropdownItem">Add Dropdown Item</button>
-+                        <p class="text-muted small">Add preset options for this variable. These values will be saved as dropdown options when the variable is created.</p>
++                        <p class="text-muted small">Manage dropdown variables in the popup below. These values will be included when this variable is created.</p>
 +                    </div>
                  </div>
                  <div class="modal-footer">
                      {!! csrf_field() !!}
-+                    <button type="button" class="btn btn-default pull-left open-configure-dropdown-modal" style="margin-right: 5px;" data-toggle="modal" data-target="#configureDropdownModal" data-variable-id="" data-dropdown-options='[]'>Configure Dropdown</button>
-@@ -167,7 +173,6 @@
-                         <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Add Dropdown Item</button>
-                         <p class="text-muted small">Add as many preset options as you would like. These values will be shown to users in a dropdown instead of a free text box.</p>
+                     <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
+-                    <button type="submit" class="btn btn-primary">Create Variable</button>
++                    <button type="button" class="btn btn-default pull-right open-create-dropdown-modal" style="margin-right: 5px;" data-toggle="modal" data-target="#createDropdownModal">Manage Dropdown</button>
++                    <button type="submit" class="btn btn-primary pull-right">Create Variable</button>
+                 </div>
+             </form>
+         </div>
+     </div>
+ </div>
+ 
++<div class="modal fade" id="createDropdownModal" tabindex="-1" role="dialog">
++    <div class="modal-dialog" role="document">
++        <div class="modal-content">
++            <div class="modal-header">
++                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
++                <h4 class="modal-title">Create Dropdown Variables</h4>
++            </div>
++            <div class="modal-body">
++                <div class="form-group">
++                    <label class="control-label">Dropdown Variables</label>
++                    <div id="createDropdownItemsContainer"></div>
++                    <button type="button" class="btn btn-xs btn-default" id="addCreateDropdownItem">Create Dropdown Variable</button>
++                    <p class="text-muted small">Add dropdown variables in this popup and save them back into the create variable form.</p>
++                </div>
++            </div>
++            <div class="modal-footer">
++                <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
++                <button type="button" class="btn btn-primary" id="saveCreateDropdownItems">Save</button>
++            </div>
++        </div>
++    </div>
++</div>
++
+ <div class="modal fade" id="configureDropdownModal" tabindex="-1" role="dialog">
+     <div class="modal-dialog" role="document">
+         <div class="modal-content">
+@@ -162,12 +191,11 @@
+                         </select>
+                     </div>
+                     <div class="form-group">
+-                        <label class="control-label">Dropdown Items</label>
++                        <label class="control-label">Dropdown Variables</label>
+                         <div id="dropdownItemsContainer"></div>
+-                        <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Add Dropdown Item</button>
+-                        <p class="text-muted small">Add as many preset options as you would like. These values will be shown to users in a dropdown instead of a free text box.</p>
++                        <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Create Dropdown Variable</button>
++                        <p class="text-muted small">Create dropdown variables here and they will appear as list items inside this popup.</p>
                      </div>
 -                    <input type="hidden" id="dropdownOptionsInput" name="dropdown_options" />
                      {!! csrf_field() !!}
                      <input type="hidden" name="_method" value="PATCH" />
                  </div>
-@@ -187,23 +192,12 @@
+@@ -187,23 +215,12 @@
      <script>
          function buildDropdownItem(value = '') {
              return $("<div class=\"input-group dropdown-option-item mb-2\">")
@@ -186,7 +228,7 @@ index 4ab21b1..ee921e4 100644
              (options || []).forEach(function (option) {
                  container.append(buildDropdownItem(option));
              });
-@@ -221,20 +215,32 @@
+@@ -221,20 +238,52 @@
          $("#dropdownVariableSelect").on("change", function () {
              const selected = $(this).find("option:selected");
              const options = selected.data("dropdown-options") || [];
@@ -208,8 +250,28 @@ index 4ab21b1..ee921e4 100644
          });
  
 -        $("#dropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
-+        $("#addNewVariableDropdownItem").on("click", function () {
-+            $("#newVariableDropdownItemsContainer").append(buildDropdownItem(''));
++        $("#createDropdownModal").on("show.bs.modal", function () {
++            const target = $("#createDropdownItemsContainer").empty();
++            $("#newVariableDropdownItemsContainer .dropdown-option-value").each(function () {
++                target.append(buildDropdownItem($(this).val()));
++            });
++        });
++
++        $("#addCreateDropdownItem").on("click", function () {
++            $("#createDropdownItemsContainer").append(buildDropdownItem(''));
++        });
++
++        $("#saveCreateDropdownItems").on("click", function () {
++            const source = $("#createDropdownItemsContainer .dropdown-option-value");
++            const target = $("#newVariableDropdownItemsContainer").empty();
++            source.each(function () {
++                target.append(buildDropdownItem($(this).val()));
++            });
++            $("#createDropdownModal").modal('hide');
++        });
++
++        $("#createDropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
++            $(this).closest(".dropdown-option-item").remove();
 +        });
 +
 +        $("#dropdownItemsContainer, #newVariableDropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
