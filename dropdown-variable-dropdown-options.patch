@@ -1,124 +1,3 @@
-diff --git a/app/Models/EggVariable.php b/app/Models/EggVariable.php
---- a/app/Models/EggVariable.php
-+++ b/app/Models/EggVariable.php
-@@ -21,6 +21,7 @@
-  * @property bool $required
-  * @property Egg $egg
-  * @property ServerVariable $serverVariable
-+ * @property array|null $dropdown_options
-  *
-  * The "server_value" variable is only present on the object if you've loaded this model
-  * using the server relationship.
-@@ -60,6 +61,7 @@
-     protected $casts = [
-         'egg_id' => 'integer',
-         'user_viewable' => 'bool',
-+        'dropdown_options' => 'array',
-         'user_editable' => 'bool',
-     ];
- 
-@@ -70,6 +72,7 @@
-         'env_variable' => 'required|regex:/^[\w]{1,191}$/|notIn:' . self::RESERVED_ENV_NAMES,
-         'default_value' => 'string',
-         'user_viewable' => 'boolean',
-+        'dropdown_options' => 'array',
-         'user_editable' => 'boolean',
-         'rules' => 'required|string',
-     ];
-@@ -77,6 +80,7 @@
-     protected $attributes = [
-         'user_editable' => 0,
-         'user_viewable' => 0,
-+        'dropdown_options' => [],
-     ];
- 
-     public function getRequiredAttribute(): bool
-diff --git a/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php b/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
---- a/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
-+++ b/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
-@@ -17,6 +17,8 @@
-             'description' => 'sometimes|nullable|string',
-             'env_variable' => 'required|regex:/^[\w]{1,191}$/|notIn:' . EggVariable::RESERVED_ENV_NAMES,
-             'options' => 'sometimes|required|array',
-+            'dropdown_options' => 'sometimes|nullable|array',
-+            'dropdown_options.*' => 'required|string|max:191',
-             'rules' => 'bail|required|string',
-             'default_value' => 'present',
-         ];
-diff --git a/app/Services/Eggs/Variables/VariableCreationService.php b/app/Services/Eggs/Variables/VariableCreationService.php
---- a/app/Services/Eggs/Variables/VariableCreationService.php
-+++ b/app/Services/Eggs/Variables/VariableCreationService.php
-@@ -46,6 +46,7 @@
-         }
- 
-         $options = array_get($data, 'options') ?? [];
-+        $dropdownOptions = array_get($data, 'dropdown_options') ?? [];
- 
-         return $this->repository->create([
-             'egg_id' => $egg,
-@@ -56,6 +57,7 @@
-             'user_viewable' => in_array('user_viewable', $options),
-             'user_editable' => in_array('user_editable', $options),
-             'rules' => $data['rules'] ?? '',
-+            'dropdown_options' => $dropdownOptions,
-         ]);
-     }
- }
-diff --git a/app/Services/Eggs/Variables/VariableUpdateService.php b/app/Services/Eggs/Variables/VariableUpdateService.php
---- a/app/Services/Eggs/Variables/VariableUpdateService.php
-+++ b/app/Services/Eggs/Variables/VariableUpdateService.php
-@@ -65,6 +65,7 @@
-         }
- 
-         $options = array_get($data, 'options') ?? [];
-+        $dropdownOptions = array_get($data, 'dropdown_options') ?? [];
- 
-         return $this->repository->withoutFreshModel()->update($variable->id, [
-             'name' => $data['name'] ?? '',
-@@ -74,6 +75,7 @@
-             'user_viewable' => in_array('user_viewable', $options),
-             'user_editable' => in_array('user_editable', $options),
-             'rules' => $data['rules'] ?? '',
-+            'dropdown_options' => $dropdownOptions,
-         ]);
-     }
- }
-diff --git a/database/migrations/2026_05_07_000000_add_egg_variable_dropdown_options.php b/database/migrations/2026_05_07_000000_add_egg_variable_dropdown_options.php
-new file mode 100644
---- /dev/null
-+++ b/database/migrations/2026_05_07_000000_add_egg_variable_dropdown_options.php
-@@ -0,0 +1,28 @@
-+<?php
-+
-+use Illuminate\Support\Facades\Schema;
-+use Illuminate\Database\Schema\Blueprint;
-+use Illuminate\Database\Migrations\Migration;
-+
-+class AddEggVariableDropdownOptions extends Migration
-+{
-+    /**
-+     * Run the migrations.
-+     */
-+    public function up(): void
-+    {
-+        Schema::table('egg_variables', function (Blueprint $table) {
-+            $table->text('dropdown_options')->nullable()->after('rules');
-+        });
-+    }
-+
-+    /**
-+     * Reverse the migrations.
-+     */
-+    public function down(): void
-+    {
-+        Schema::table('egg_variables', function (Blueprint $table) {
-+            $table->dropColumn('dropdown_options');
-+        });
-+    }
-+}
-
-diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
-index 4ab21b1..345c255 100644
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
 @@ -31,7 +31,6 @@
@@ -137,7 +16,7 @@ index 4ab21b1..345c255 100644
                          <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
                          <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
                      </div>
-@@ -132,17 +132,46 @@
+@@ -132,13 +132,42 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
@@ -155,10 +34,10 @@ index 4ab21b1..345c255 100644
 +                    <button type="submit" class="btn btn-primary pull-right">Create Variable</button>
                  </div>
              </form>
-         </div>
-     </div>
- </div>
- 
++        </div>
++    </div>
++</div>
++
 +<div class="modal fade" id="createDropdownModal" tabindex="-1" role="dialog">
 +    <div class="modal-dialog" role="document">
 +        <div class="modal-content">
@@ -178,13 +57,9 @@ index 4ab21b1..345c255 100644
 +                <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
 +                <button type="button" class="btn btn-primary" id="saveCreateDropdownItems">Save</button>
 +            </div>
-+        </div>
-+    </div>
-+</div>
-+
- <div class="modal fade" id="configureDropdownModal" tabindex="-1" role="dialog">
-     <div class="modal-dialog" role="document">
-         <div class="modal-content">
+         </div>
+     </div>
+ </div>
 @@ -162,12 +191,11 @@
                          </select>
                      </div>
@@ -194,10 +69,11 @@ index 4ab21b1..345c255 100644
                          <div id="dropdownItemsContainer"></div>
 -                        <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Add Dropdown Item</button>
 -                        <p class="text-muted small">Add as many preset options as you would like. These values will be shown to users in a dropdown instead of a free text box.</p>
+-                    </div>
+-                    <input type="hidden" id="dropdownOptionsInput" name="dropdown_options" />
 +                        <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Create Dropdown Variable</button>
 +                        <p class="text-muted small">Create dropdown variables here and they will appear as list items inside this popup.</p>
-                     </div>
--                    <input type="hidden" id="dropdownOptionsInput" name="dropdown_options" />
++                    </div>
                      {!! csrf_field() !!}
                      <input type="hidden" name="_method" value="PATCH" />
                  </div>
@@ -235,16 +111,16 @@ index 4ab21b1..345c255 100644
 -            populateDropdownItems(Array.isArray(options) ? options : []);
 +            populateDropdownItems("#dropdownItemsContainer", Array.isArray(options) ? options : []);
              setConfigureDropdownFormAction($(this).val());
-         });
- 
++        });
++
 +        $(document).on("click", ".open-configure-dropdown-modal", function () {
 +            const variableId = $(this).data("variable-id");
 +            const options = $(this).data("dropdown-options") || [];
 +            $("#dropdownVariableSelect").val(variableId).trigger("change");
 +            populateDropdownItems("#dropdownItemsContainer", Array.isArray(options) ? options : []);
 +            setConfigureDropdownFormAction(variableId);
-+        });
-+
+         });
+ 
          $("#addDropdownItem").on("click", function () {
              $("#dropdownItemsContainer").append(buildDropdownItem(''));
          });
@@ -285,56 +161,3 @@ index 4ab21b1..345c255 100644
          });
  
          $('.pOptions').select2();
-diff --git a/resources/scripts/api/server/types.d.ts b/resources/scripts/api/server/types.d.ts
---- a/resources/scripts/api/server/types.d.ts
-+++ b/resources/scripts/api/server/types.d.ts
-@@ -25,5 +25,6 @@
-     defaultValue: string;
-     serverValue: string | null;
-     isEditable: boolean;
-+    dropdownOptions: string[];
-     rules: string[];
- }
-diff --git a/resources/scripts/api/transformers.ts b/resources/scripts/api/transformers.ts
---- a/resources/scripts/api/transformers.ts
-+++ b/resources/scripts/api/transformers.ts
-@@ -74,4 +74,5 @@
-     serverValue: attributes.server_value,
-     isEditable: attributes.is_editable,
-     rules: attributes.rules.split('|'),
-+    dropdownOptions: attributes.dropdown_options || [],
- });
-diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..70668b7 100644
---- a/resources/scripts/components/server/startup/VariableBox.tsx
-+++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -54,6 +54,7 @@ const VariableBox = ({ variable }: Props) => {
-     const useSwitch = variable.rules.some(
-         (v) => v === 'boolean' || v === 'in:0,1' || v === 'in:1,0' || v === 'in:true,false' || v === 'in:false,true'
-     );
-+    const dropdownOptions = variable.dropdownOptions || [];
-     const isStringSwitch = variable.rules.some((v) => v === 'string');
-     const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
- 
-@@ -91,7 +92,20 @@ const VariableBox = ({ variable }: Props) => {
-                     </>
-                 ) : (
-                     <>
--                        {selectValues.length > 0 ? (
-+                        {dropdownOptions.length > 0 ? (
-+                            <Select
-+                                onChange={(e) => setVariableValue(e.target.value)}
-+                                name={variable.envVariable}
-+                                defaultValue={variable.serverValue ?? variable.defaultValue}
-+                                disabled={!canEdit || !variable.isEditable}
-+                            >
-+                                {dropdownOptions.map((selectValue) => (
-+                                    <option key={selectValue} value={selectValue}>
-+                                        {selectValue}
-+                                    </option>
-+                                ))}
-+                            </Select>
-+                        ) : selectValues.length > 0 ? (
-                             <>
-                                 <Select
-                                     onChange={(e) => setVariableValue(e.target.value)}
