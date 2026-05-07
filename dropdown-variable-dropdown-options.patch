@@ -118,118 +118,110 @@ new file mode 100644
 +}
 
 diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
-index c3e7d8c..4ab21b1 100644
+index 4ab21b1..ee921e4 100644
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
-@@ -31,6 +31,7 @@
+@@ -31,7 +31,6 @@
      <div class="col-xs-12">
          <div class="box no-border">
              <div class="box-body">
-+                <a href="#" class="btn btn-sm btn-default pull-left" data-toggle="modal" data-target="#configureDropdownModal">Configure Dropdown</a>
+-                <a href="#" class="btn btn-sm btn-default pull-left" data-toggle="modal" data-target="#configureDropdownModal">Configure Dropdown</a>
                  <a href="#" class="btn btn-sm btn-success pull-right" data-toggle="modal" data-target="#newVariableModal">Create New Variable</a>
              </div>
          </div>
-@@ -142,12 +143,100 @@
-     </div>
- </div>
- 
-+<div class="modal fade" id="configureDropdownModal" tabindex="-1" role="dialog">
-+    <div class="modal-dialog" role="document">
-+        <div class="modal-content">
-+            <div class="modal-header">
-+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-+                <h4 class="modal-title">Configure Dropdown</h4>
-+            </div>
-+            <form id="configureDropdownForm" method="POST">
-+                <div class="modal-body">
-+                    <div class="form-group">
-+                        <label class="control-label">Variable</label>
-+                        <select id="dropdownVariableSelect" class="form-control">
-+                            <option value="">Select a variable</option>
-+                            @foreach($egg->variables as $variable)
-+                                <option value="{{ $variable->id }}" data-dropdown-options="{{ json_encode($variable->dropdown_options) }}">{{ $variable->name }}</option>
-+                            @endforeach
-+                        </select>
-+                    </div>
+@@ -82,6 +81,7 @@
+                     </div>
+                     <div class="box-footer">
+                         {!! csrf_field() !!}
++                        <button type="button" class="btn btn-sm btn-default pull-left open-configure-dropdown-modal" style="margin-right: 5px;" data-toggle="modal" data-target="#configureDropdownModal" data-variable-id="{{ $variable->id }}" data-dropdown-options='{{ json_encode($variable->dropdown_options) }}'>Configure Dropdown</button>
+                         <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
+                         <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
+                     </div>
+@@ -132,6 +132,12 @@
+                         <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
+                         <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
+                     </div>
 +                    <div class="form-group">
 +                        <label class="control-label">Dropdown Items</label>
-+                        <div id="dropdownItemsContainer"></div>
-+                        <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Add Dropdown Item</button>
-+                        <p class="text-muted small">Add as many preset options as you would like. These values will be shown to users in a dropdown instead of a free text box.</p>
++                        <div id="newVariableDropdownItemsContainer"></div>
++                        <button type="button" class="btn btn-xs btn-default" id="addNewVariableDropdownItem">Add Dropdown Item</button>
++                        <p class="text-muted small">Add preset options for this variable. These values will be saved as dropdown options when the variable is created.</p>
 +                    </div>
-+                    <input type="hidden" id="dropdownOptionsInput" name="dropdown_options" />
-+                    {!! csrf_field() !!}
-+                    <input type="hidden" name="_method" value="PATCH" />
-+                </div>
-+                <div class="modal-footer">
-+                    <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
-+                    <button type="submit" class="btn btn-primary">Save Dropdown</button>
-+                </div>
-+            </form>
-+        </div>
-+    </div>
-+</div>
- 
- @endsection
- 
- @section('footer-scripts')
-     @parent
+                 </div>
+                 <div class="modal-footer">
+                     {!! csrf_field() !!}
+@@ -167,7 +173,6 @@
+                         <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Add Dropdown Item</button>
+                         <p class="text-muted small">Add as many preset options as you would like. These values will be shown to users in a dropdown instead of a free text box.</p>
+                     </div>
+-                    <input type="hidden" id="dropdownOptionsInput" name="dropdown_options" />
+                     {!! csrf_field() !!}
+                     <input type="hidden" name="_method" value="PATCH" />
+                 </div>
+@@ -187,23 +192,12 @@
      <script>
-+        function buildDropdownItem(value = "") {
-+            return $("<div class=\"input-group dropdown-option-item mb-2\">")
-+                .append("<input type=\"text\" class=\"form-control dropdown-option-value\" value=\"" + $("<div/>").text(value).html() + "\" />")
-+                .append("<span class=\"input-group-btn\"><button type=\"button\" class=\"btn btn-danger remove-dropdown-item\">Remove</button></span>");
-+        }
-+
-+        function updateDropdownOptionsField() {
-+            const values = [];
-+            $("#dropdownItemsContainer .dropdown-option-value").each(function () {
-+                const value = $(this).val();
-+                if (value !== undefined && value !== null && value.toString().trim().length > 0) {
-+                    values.push(value.toString());
-+                }
-+            });
-+            $("#dropdownOptionsInput").val(JSON.stringify(values));
-+        }
-+
-+        function populateDropdownItems(options) {
-+            const container = $("#dropdownItemsContainer").empty();
-+            (options || []).forEach(function (option) {
-+                container.append(buildDropdownItem(option));
-+            });
-+        }
-+
-+        function setConfigureDropdownFormAction(variableId) {
-+            if (!variableId) {
-+                $("#configureDropdownForm").attr("action", "#");
-+                return;
-+            }
-+
-+            $("#configureDropdownForm").attr("action", "{{ route('admin.nests.egg.variables.edit', ['egg' => $egg->id, 'variable' => 'VARIABLE_ID']) }}".replace('VARIABLE_ID', variableId));
-+        }
-+
-+        $("#dropdownVariableSelect").on("change", function () {
-+            const selected = $(this).find("option:selected");
-+            const options = selected.data("dropdown-options") || [];
-+            populateDropdownItems(Array.isArray(options) ? options : []);
-+            setConfigureDropdownFormAction($(this).val());
+         function buildDropdownItem(value = '') {
+             return $("<div class=\"input-group dropdown-option-item mb-2\">")
+-                .append("<input type=\"text\" class=\"form-control dropdown-option-value\" value=\"" + $("<div/>").text(value).html() + "\" />")
++                .append("<input type=\"text\" name=\"dropdown_options[]\" class=\"form-control dropdown-option-value\" value=\"" + $("<div/>\").text(value).html() + "\" />")
+                 .append("<span class=\"input-group-btn\"><button type=\"button\" class=\"btn btn-danger remove-dropdown-item\">Remove</button></span>");
+         }
+ 
+-        function updateDropdownOptionsField() {
+-            const values = [];
+-            $("#dropdownItemsContainer .dropdown-option-value").each(function () {
+-                const value = $(this).val();
+-                if (value !== undefined && value !== null && value.toString().trim().length > 0) {
+-                    values.push(value.toString());
+-                }
+-            });
+-            $("#dropdownOptionsInput").val(JSON.stringify(values));
+-        }
+-
+-        function populateDropdownItems(options) {
+-            const container = $("#dropdownItemsContainer").empty();
++        function populateDropdownItems(container, options) {
++            container = $(container).empty();
+             (options || []).forEach(function (option) {
+                 container.append(buildDropdownItem(option));
+             });
+@@ -221,20 +215,32 @@
+         $("#dropdownVariableSelect").on("change", function () {
+             const selected = $(this).find("option:selected");
+             const options = selected.data("dropdown-options") || [];
+-            populateDropdownItems(Array.isArray(options) ? options : []);
++            populateDropdownItems("#dropdownItemsContainer", Array.isArray(options) ? options : []);
+             setConfigureDropdownFormAction($(this).val());
+         });
+ 
++        $(document).on("click", ".open-configure-dropdown-modal", function () {
++            const variableId = $(this).data("variable-id");
++            const options = $(this).data("dropdown-options") || [];
++            $("#dropdownVariableSelect").val(variableId).trigger("change");
++            populateDropdownItems("#dropdownItemsContainer", Array.isArray(options) ? options : []);
++            setConfigureDropdownFormAction(variableId);
 +        });
 +
-+        $("#addDropdownItem").on("click", function () {
-+            $("#dropdownItemsContainer").append(buildDropdownItem(''));
+         $("#addDropdownItem").on("click", function () {
+             $("#dropdownItemsContainer").append(buildDropdownItem(''));
+         });
+ 
+-        $("#dropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
++        $("#addNewVariableDropdownItem").on("click", function () {
++            $("#newVariableDropdownItemsContainer").append(buildDropdownItem(''));
 +        });
 +
-+        $("#dropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
-+            $(this).closest(".dropdown-option-item").remove();
-+        });
-+
-+        $("#configureDropdownForm").on("submit", function () {
-+            updateDropdownOptionsField();
-+        });
-+        
-          $(".pOptions").select2();
-          $("[data-action=\"delete\"]").on('mouseenter', function (event) {
-              $(this).find('i').html(' Delete Variable');
++        $("#dropdownItemsContainer, #newVariableDropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
+             $(this).closest(".dropdown-option-item").remove();
+         });
+ 
+-        $("#configureDropdownForm").on("submit", function () {
+-            updateDropdownOptionsField();
++        $("#newVariableModal").on("show.bs.modal", function () {
++            $("#newVariableDropdownItemsContainer").empty();
+         });
+ 
+         $('.pOptions').select2();
 diff --git a/resources/scripts/api/server/types.d.ts b/resources/scripts/api/server/types.d.ts
 --- a/resources/scripts/api/server/types.d.ts
 +++ b/resources/scripts/api/server/types.d.ts
@@ -249,7 +241,7 @@ diff --git a/resources/scripts/api/transformers.ts b/resources/scripts/api/trans
      rules: attributes.rules.split('|'),
 +    dropdownOptions: attributes.dropdown_options || [],
  });
-diff --git a/temp-original-VariableBox.tsx b/temp-current-VariableBox.tsx
+diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 index cffadd8..70668b7 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
