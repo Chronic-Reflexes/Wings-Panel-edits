@@ -36,12 +36,13 @@ diff --git a/app/Models/EggVariable.php b/app/Models/EggVariable.php
 diff --git a/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php b/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
 --- a/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
 +++ b/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
-@@ -17,6 +17,8 @@
+@@ -17,6 +17,9 @@
              'description' => 'sometimes|nullable|string',
              'env_variable' => 'required|regex:/^[\w]{1,191}$/|notIn:' . EggVariable::RESERVED_ENV_NAMES,
              'options' => 'sometimes|required|array',
 +            'dropdown_options' => 'sometimes|nullable|array',
 +            'dropdown_options.*' => 'required|string|max:191',
++            'dropdown_options_present' => 'sometimes',
              'rules' => 'bail|required|string',
              'default_value' => 'present',
          ];
