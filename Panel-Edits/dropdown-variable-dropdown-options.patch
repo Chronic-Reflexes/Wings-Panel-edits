@@ -239,7 +239,7 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
          </div>
      </div>
  </div>
-@@ -146,6 +207,100 @@
+@@ -146,6 +207,101 @@
  @section('footer-scripts')
      @parent
      <script>
@@ -331,6 +331,7 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +            });
 +
 +            $("#editDropdownModal").modal('hide');
++            source.closest("form").trigger("submit");
 +        });
 +
 +        $("#createDropdownItemsContainer, #editDropdownItemsContainer").on("click", ".remove-dropdown-item", function () {
