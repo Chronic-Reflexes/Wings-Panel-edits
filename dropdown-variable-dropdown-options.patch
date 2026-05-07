@@ -150,6 +150,7 @@ index 4ab21b1..ee921e4 100644
                  </div>
                  <div class="modal-footer">
                      {!! csrf_field() !!}
++                    <button type="button" class="btn btn-default pull-left open-configure-dropdown-modal" style="margin-right: 5px;" data-toggle="modal" data-target="#configureDropdownModal" data-variable-id="" data-dropdown-options='[]'>Configure Dropdown</button>
 @@ -167,7 +173,6 @@
                          <button type="button" class="btn btn-xs btn-default" id="addDropdownItem">Add Dropdown Item</button>
                          <p class="text-muted small">Add as many preset options as you would like. These values will be shown to users in a dropdown instead of a free text box.</p>
