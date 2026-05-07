@@ -1,0 +1,929 @@
+diff --git a/app/Http/Controllers/Admin/Nests/EggPopupController.php b/app/Http/Controllers/Admin/Nests/EggPopupController.php
+new file mode 100644
+index 0000000..b7e5e1c
+--- /dev/null
++++ b/app/Http/Controllers/Admin/Nests/EggPopupController.php
+@@ -0,0 +1,144 @@
++<?php
++
++namespace Pterodactyl\Http\Controllers\Admin\Nests;
++
++use Illuminate\View\View;
++use Pterodactyl\Models\Egg;
++use Illuminate\Http\RedirectResponse;
++use Illuminate\Support\Facades\Schema;
++use Prologue\Alerts\AlertsMessageBag;
++use Pterodactyl\Http\Controllers\Controller;
++use Pterodactyl\Services\Eggs\EggUpdateService;
++use Pterodactyl\Http\Requests\Admin\Egg\EggPopupFormRequest;
++
++class EggPopupController extends Controller
++{
++    private const POPUPS = [
++        'on_first_start' => [
++            'name' => 'On First Start',
++            'description' => 'Shown once when a user first opens the server console.',
++            'title_field' => 'popup_on_first_start_title',
++            'content_field' => 'popup_on_first_start_content',
++            'legacy_title_field' => 'first_run_popup_title',
++            'legacy_content_field' => 'first_run_popup_content',
++        ],
++        'on_console_error' => [
++            'name' => 'On Console Error Message',
++            'description' => 'Shown when an error-like line is detected in console output.',
++            'title_field' => 'popup_on_console_error_title',
++            'content_field' => 'popup_on_console_error_content',
++            'legacy_title_field' => null,
++            'legacy_content_field' => null,
++        ],
++    ];
++
++    public function __construct(
++        private readonly AlertsMessageBag $alert,
++        private readonly EggUpdateService $updateService,
++    ) {
++    }
++
++    /**
++     * Show the popup list for an egg.
++     */
++    public function index(Egg $egg): View
++    {
++        $popups = collect(self::POPUPS)->map(function (array $popup, string $key) use ($egg) {
++            $fields = $this->resolveStorageFields($popup);
++
++            return array_merge($popup, [
++                'key' => $key,
++                'is_configured' => filled($this->getEggFieldValue($egg, $fields['title'])) || filled($this->getEggFieldValue($egg, $fields['content'])),
++            ]);
++        })->values();
++
++        return view('admin.eggs.popups', [
++            'egg' => $egg,
++            'popups' => $popups,
++        ]);
++    }
++
++    /**
++     * Show popup settings for a specific popup key.
++     */
++    public function view(Egg $egg, string $popupKey): View
++    {
++        $popup = $this->resolvePopup($popupKey);
++        $fields = $this->resolveStorageFields($popup);
++
++        return view('admin.eggs.popup', [
++            'egg' => $egg,
++            'popup' => $popup,
++            'popupKey' => $popupKey,
++            'titleValue' => $this->getEggFieldValue($egg, $fields['title']),
++            'contentValue' => $this->getEggFieldValue($egg, $fields['content']),
++        ]);
++    }
++
++    /**
++     * Update popup modal settings for an egg.
++     *
++     * @throws \Pterodactyl\Exceptions\Model\DataValidationException
++     * @throws \Pterodactyl\Exceptions\Repository\RecordNotFoundException
++     * @throws \Pterodactyl\Exceptions\Service\Egg\NoParentConfigurationFoundException
++     */
++    public function update(EggPopupFormRequest $request, Egg $egg, string $popupKey): RedirectResponse
++    {
++        $popup = $this->resolvePopup($popupKey);
++        $fields = $this->resolveStorageFields($popup);
++        $data = $request->validated();
++        $payload = [];
++
++        if (!is_null($fields['title'])) {
++            $payload[$fields['title']] = $data['title'];
++        }
++
++        if (!is_null($fields['content'])) {
++            $payload[$fields['content']] = $data['content'];
++        }
++
++        if (empty($payload)) {
++            $this->alert->warning('Popup columns are not available yet. Run database migrations and try again.')->flash();
++
++            return redirect()->route('admin.nests.egg.popup.view', [$egg->id, $popupKey]);
++        }
++
++        $this->updateService->handle($egg, $payload);
++        $this->alert->success(trans('admin/nests.eggs.notices.updated'))->flash();
++
++        return redirect()->route('admin.nests.egg.popup.view', [$egg->id, $popupKey]);
++    }
++
++    private function resolvePopup(string $popupKey): array
++    {
++        abort_unless(array_key_exists($popupKey, self::POPUPS), 404);
++
++        return self::POPUPS[$popupKey];
++    }
++
++    private function resolveStorageFields(array $popup): array
++    {
++        $title = $popup['title_field'];
++        $content = $popup['content_field'];
++
++        if (Schema::hasColumn('eggs', $title) && Schema::hasColumn('eggs', $content)) {
++            return ['title' => $title, 'content' => $content];
++        }
++
++        $legacyTitle = $popup['legacy_title_field'];
++        $legacyContent = $popup['legacy_content_field'];
++        if (!is_null($legacyTitle) && !is_null($legacyContent)
++            && Schema::hasColumn('eggs', $legacyTitle)
++            && Schema::hasColumn('eggs', $legacyContent)
++        ) {
++            return ['title' => $legacyTitle, 'content' => $legacyContent];
++        }
++
++        return ['title' => null, 'content' => null];
++    }
++
++    private function getEggFieldValue(Egg $egg, ?string $field): ?string
++    {
++        return is_null($field) ? null : $egg->{$field};
++    }
++}
+diff --git a/app/Http/Requests/Admin/Egg/EggFormRequest.php b/app/Http/Requests/Admin/Egg/EggFormRequest.php
+index 561ffb7..9a1392c 100644
+--- a/app/Http/Requests/Admin/Egg/EggFormRequest.php
++++ b/app/Http/Requests/Admin/Egg/EggFormRequest.php
+@@ -21,6 +21,10 @@ class EggFormRequest extends AdminFormRequest
+             'config_startup' => 'required_without:config_from|nullable|json',
+             'config_logs' => 'required_without:config_from|nullable|json',
+             'config_files' => 'required_without:config_from|nullable|json',
++            'popup_on_first_start_title' => 'nullable|string|max:191',
++            'popup_on_first_start_content' => 'nullable|string',
++            'popup_on_console_error_title' => 'nullable|string|max:191',
++            'popup_on_console_error_content' => 'nullable|string',
+         ];
+ 
+         if ($this->method() === 'POST') {
+diff --git a/app/Http/Requests/Admin/Egg/EggPopupFormRequest.php b/app/Http/Requests/Admin/Egg/EggPopupFormRequest.php
+new file mode 100644
+index 0000000..892d4f7
+--- /dev/null
++++ b/app/Http/Requests/Admin/Egg/EggPopupFormRequest.php
+@@ -0,0 +1,29 @@
++<?php
++
++namespace Pterodactyl\Http\Requests\Admin\Egg;
++
++use Pterodactyl\Http\Requests\Admin\AdminFormRequest;
++
++class EggPopupFormRequest extends AdminFormRequest
++{
++    public function rules(): array
++    {
++        return [
++            'title' => 'nullable|string|max:191',
++            'content' => 'nullable|string',
++        ];
++    }
++
++    public function validated($key = null, $default = null): array
++    {
++        $data = parent::validated();
++
++        $title = trim((string) array_get($data, 'title', ''));
++        $content = trim((string) array_get($data, 'content', ''));
++
++        return [
++            'title' => $title === '' ? null : $title,
++            'content' => $content === '' ? null : $content,
++        ];
++    }
++}
+diff --git a/app/Models/Egg.php b/app/Models/Egg.php
+index 7b5f6ac..339204c 100644
+--- a/app/Models/Egg.php
++++ b/app/Models/Egg.php
+@@ -16,6 +16,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
+  * @property string $name
+  * @property string|null $description
+  * @property array|null $features
++ * @property string|null $popup_on_first_start_title
++ * @property string|null $popup_on_first_start_content
++ * @property string|null $popup_on_console_error_title
++ * @property string|null $popup_on_console_error_content
+  * @property string $docker_image -- deprecated, use $docker_images
+  * @property array<string, string> $docker_images
+  * @property string $update_url
+@@ -91,6 +95,10 @@ class Egg extends Model implements Identifiable
+         'name',
+         'description',
+         'features',
++        'popup_on_first_start_title',
++        'popup_on_first_start_content',
++        'popup_on_console_error_title',
++        'popup_on_console_error_content',
+         'docker_images',
+         'force_outgoing_ip',
+         'file_denylist',
+@@ -127,6 +135,10 @@ class Egg extends Model implements Identifiable
+         'name' => 'required|string|max:191',
+         'description' => 'string|nullable',
+         'features' => 'array|nullable',
++        'popup_on_first_start_title' => 'nullable|string|max:191',
++        'popup_on_first_start_content' => 'nullable|string',
++        'popup_on_console_error_title' => 'nullable|string|max:191',
++        'popup_on_console_error_content' => 'nullable|string',
+         'author' => 'required|string|email',
+         'file_denylist' => 'array|nullable',
+         'file_denylist.*' => 'string',
+@@ -252,6 +268,54 @@ class Egg extends Model implements Identifiable
+         return $this->configFrom->features;
+     }
+ 
++    /**
++     * Return the first-run popup title from this egg or inherited config.
++     */
++    public function getInheritPopupOnFirstStartTitleAttribute(): ?string
++    {
++        if (!is_null($this->popup_on_first_start_title) || is_null($this->config_from)) {
++            return $this->popup_on_first_start_title;
++        }
++
++        return $this->configFrom->popup_on_first_start_title;
++    }
++
++    /**
++     * Return the first-run popup content from this egg or inherited config.
++     */
++    public function getInheritPopupOnFirstStartContentAttribute(): ?string
++    {
++        if (!is_null($this->popup_on_first_start_content) || is_null($this->config_from)) {
++            return $this->popup_on_first_start_content;
++        }
++
++        return $this->configFrom->popup_on_first_start_content;
++    }
++
++    /**
++     * Return the console-error popup title from this egg or inherited config.
++     */
++    public function getInheritPopupOnConsoleErrorTitleAttribute(): ?string
++    {
++        if (!is_null($this->popup_on_console_error_title) || is_null($this->config_from)) {
++            return $this->popup_on_console_error_title;
++        }
++
++        return $this->configFrom->popup_on_console_error_title;
++    }
++
++    /**
++     * Return the console-error popup content from this egg or inherited config.
++     */
++    public function getInheritPopupOnConsoleErrorContentAttribute(): ?string
++    {
++        if (!is_null($this->popup_on_console_error_content) || is_null($this->config_from)) {
++            return $this->popup_on_console_error_content;
++        }
++
++        return $this->configFrom->popup_on_console_error_content;
++    }
++
+     /**
+      * Returns the features available to this egg from the parent configuration if there are
+      * no features defined for this egg specifically and there is a parent egg configured.
+diff --git a/app/Services/Eggs/EggParserService.php b/app/Services/Eggs/EggParserService.php
+index 75add23..e620631 100644
+--- a/app/Services/Eggs/EggParserService.php
++++ b/app/Services/Eggs/EggParserService.php
+@@ -40,6 +40,10 @@ class EggParserService
+             'name' => Arr::get($parsed, 'name'),
+             'description' => Arr::get($parsed, 'description'),
+             'features' => Arr::get($parsed, 'features'),
++            'popup_on_first_start_title' => Arr::get($parsed, 'popup_modals.on_first_start.title', Arr::get($parsed, 'first_run_popup.title')),
++            'popup_on_first_start_content' => Arr::get($parsed, 'popup_modals.on_first_start.content', Arr::get($parsed, 'first_run_popup.content')),
++            'popup_on_console_error_title' => Arr::get($parsed, 'popup_modals.on_console_error.title'),
++            'popup_on_console_error_content' => Arr::get($parsed, 'popup_modals.on_console_error.content'),
+             'docker_images' => Arr::get($parsed, 'docker_images'),
+             'file_denylist' => Collection::make(Arr::get($parsed, 'file_denylist'))
+                 ->filter(fn ($value) => !empty($value)),
+diff --git a/app/Services/Eggs/Sharing/EggExporterService.php b/app/Services/Eggs/Sharing/EggExporterService.php
+index 706297b..3d7a2d9 100644
+--- a/app/Services/Eggs/Sharing/EggExporterService.php
++++ b/app/Services/Eggs/Sharing/EggExporterService.php
+@@ -37,6 +37,16 @@ class EggExporterService
+             'author' => $egg->author,
+             'description' => $egg->description,
+             'features' => $egg->features,
++            'popup_modals' => [
++                'on_first_start' => [
++                    'title' => $egg->inherit_popup_on_first_start_title,
++                    'content' => $egg->inherit_popup_on_first_start_content,
++                ],
++                'on_console_error' => [
++                    'title' => $egg->inherit_popup_on_console_error_title,
++                    'content' => $egg->inherit_popup_on_console_error_content,
++                ],
++            ],
+             'docker_images' => $egg->docker_images,
+             'file_denylist' => Collection::make($egg->inherit_file_denylist)->filter(function ($value) {
+                 return !empty($value);
+diff --git a/app/Transformers/Api/Client/ServerTransformer.php b/app/Transformers/Api/Client/ServerTransformer.php
+index 747d2f2..58d859b 100644
+--- a/app/Transformers/Api/Client/ServerTransformer.php
++++ b/app/Transformers/Api/Client/ServerTransformer.php
+@@ -35,6 +35,20 @@ class ServerTransformer extends BaseClientTransformer
+         $service = Container::getInstance()->make(StartupCommandService::class);
+ 
+         $user = $this->request->user();
++        $popupOnFirstStartTitle = $server->egg->inherit_popup_on_first_start_title;
++        $popupOnFirstStartContent = $server->egg->inherit_popup_on_first_start_content;
++        $popupOnConsoleErrorTitle = $server->egg->inherit_popup_on_console_error_title;
++        $popupOnConsoleErrorContent = $server->egg->inherit_popup_on_console_error_content;
++        $eggFeatures = $server->egg->inherit_features ?? [];
++
++        if (
++            !empty($popupOnFirstStartTitle)
++            || !empty($popupOnFirstStartContent)
++            || !empty($popupOnConsoleErrorTitle)
++            || !empty($popupOnConsoleErrorContent)
++        ) {
++            $eggFeatures[] = 'popup_modals';
++        }
+ 
+         return [
+             'server_owner' => $user->id === $server->owner_id,
+@@ -67,7 +81,11 @@ class ServerTransformer extends BaseClientTransformer
+             ],
+             'invocation' => $service->handle($server, !$user->can(Permission::ACTION_STARTUP_READ, $server)),
+             'docker_image' => $server->image,
+-            'egg_features' => $server->egg->inherit_features,
++            'popup_on_first_start_title' => $popupOnFirstStartTitle,
++            'popup_on_first_start_content' => $popupOnFirstStartContent,
++            'popup_on_console_error_title' => $popupOnConsoleErrorTitle,
++            'popup_on_console_error_content' => $popupOnConsoleErrorContent,
++            'egg_features' => array_values(array_unique($eggFeatures)),
+             'feature_limits' => [
+                 'databases' => $server->database_limit,
+                 'allocations' => $server->allocation_limit,
+diff --git a/database/migrations/2026_05_03_000000_add_first_run_popup_to_eggs_table.php b/database/migrations/2026_05_03_000000_add_first_run_popup_to_eggs_table.php
+new file mode 100644
+index 0000000..a78a01c
+--- /dev/null
++++ b/database/migrations/2026_05_03_000000_add_first_run_popup_to_eggs_table.php
+@@ -0,0 +1,36 @@
++<?php
++
++use Illuminate\Support\Facades\Schema;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Database\Migrations\Migration;
++
++class AddFirstRunPopupToEggsTable extends Migration
++{
++    /**
++     * Run the migrations.
++     */
++    public function up(): void
++    {
++        Schema::table('eggs', function (Blueprint $table) {
++            $table->string('popup_on_first_start_title')->nullable()->after('features');
++            $table->text('popup_on_first_start_content')->nullable()->after('popup_on_first_start_title');
++            $table->string('popup_on_console_error_title')->nullable()->after('popup_on_first_start_content');
++            $table->text('popup_on_console_error_content')->nullable()->after('popup_on_console_error_title');
++        });
++    }
++
++    /**
++     * Reverse the migrations.
++     */
++    public function down(): void
++    {
++        Schema::table('eggs', function (Blueprint $table) {
++            $table->dropColumn([
++                'popup_on_first_start_title',
++                'popup_on_first_start_content',
++                'popup_on_console_error_title',
++                'popup_on_console_error_content',
++            ]);
++        });
++    }
++}
+diff --git a/database/migrations/2026_05_03_000001_add_popup_modal_compat_columns_to_eggs_table.php b/database/migrations/2026_05_03_000001_add_popup_modal_compat_columns_to_eggs_table.php
+new file mode 100644
+index 0000000..b595a1b
+--- /dev/null
++++ b/database/migrations/2026_05_03_000001_add_popup_modal_compat_columns_to_eggs_table.php
+@@ -0,0 +1,64 @@
++<?php
++
++use Illuminate\Support\Facades\DB;
++use Illuminate\Support\Facades\Schema;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Database\Migrations\Migration;
++
++class AddPopupModalCompatColumnsToEggsTable extends Migration
++{
++    /**
++     * Run the migrations.
++     */
++    public function up(): void
++    {
++        Schema::table('eggs', function (Blueprint $table) {
++            if (!Schema::hasColumn('eggs', 'popup_on_first_start_title')) {
++                $table->string('popup_on_first_start_title')->nullable()->after('features');
++            }
++
++            if (!Schema::hasColumn('eggs', 'popup_on_first_start_content')) {
++                $table->text('popup_on_first_start_content')->nullable()->after('popup_on_first_start_title');
++            }
++
++            if (!Schema::hasColumn('eggs', 'popup_on_console_error_title')) {
++                $table->string('popup_on_console_error_title')->nullable()->after('popup_on_first_start_content');
++            }
++
++            if (!Schema::hasColumn('eggs', 'popup_on_console_error_content')) {
++                $table->text('popup_on_console_error_content')->nullable()->after('popup_on_console_error_title');
++            }
++        });
++
++        // Backfill from the previous patch schema when those legacy columns exist.
++        if (Schema::hasColumn('eggs', 'first_run_popup_title')) {
++            DB::table('eggs')
++                ->whereNull('popup_on_first_start_title')
++                ->update(['popup_on_first_start_title' => DB::raw('first_run_popup_title')]);
++        }
++
++        if (Schema::hasColumn('eggs', 'first_run_popup_content')) {
++            DB::table('eggs')
++                ->whereNull('popup_on_first_start_content')
++                ->update(['popup_on_first_start_content' => DB::raw('first_run_popup_content')]);
++        }
++    }
++
++    /**
++     * Reverse the migrations.
++     */
++    public function down(): void
++    {
++        Schema::table('eggs', function (Blueprint $table) {
++            $drop = [];
++            foreach (['popup_on_console_error_content', 'popup_on_console_error_title', 'popup_on_first_start_content', 'popup_on_first_start_title'] as $column) {
++                if (Schema::hasColumn('eggs', $column)) {
++                    $drop[] = $column;
++                }
++            }
++            if (!empty($drop)) {
++                $table->dropColumn($drop);
++            }
++        });
++    }
++}
+diff --git a/resources/scripts/api/server/getServer.ts b/resources/scripts/api/server/getServer.ts
+index 16743ef..0c48c69 100644
+--- a/resources/scripts/api/server/getServer.ts
++++ b/resources/scripts/api/server/getServer.ts
+@@ -43,6 +43,10 @@ export interface Server {
+     invocation: string;
+     dockerImage: string;
+     description: string;
++    popupOnFirstStartTitle: string | null;
++    popupOnFirstStartContent: string | null;
++    popupOnConsoleErrorTitle: string | null;
++    popupOnConsoleErrorContent: string | null;
+     limits: {
+         memory: number;
+         swap: number;
+@@ -79,6 +83,10 @@ export const rawDataToServerObject = ({ attributes: data }: FractalResponseData)
+         port: data.sftp_details.port,
+     },
+     description: data.description ? (data.description.length > 0 ? data.description : null) : null,
++    popupOnFirstStartTitle: data.popup_on_first_start_title || null,
++    popupOnFirstStartContent: data.popup_on_first_start_content || null,
++    popupOnConsoleErrorTitle: data.popup_on_console_error_title || null,
++    popupOnConsoleErrorContent: data.popup_on_console_error_content || null,
+     limits: { ...data.limits },
+     eggFeatures: data.egg_features || [],
+     featureLimits: { ...data.feature_limits },
+diff --git a/resources/scripts/components/server/features/FirstRunPopupFeature.tsx b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
+new file mode 100644
+index 0000000..e5c41f1
+--- /dev/null
++++ b/resources/scripts/components/server/features/FirstRunPopupFeature.tsx
+@@ -0,0 +1,129 @@
++import React, { useEffect, useMemo, useState } from 'react';
++import { ServerContext } from '@/state/server';
++import Modal from '@/components/elements/Modal';
++import tw from 'twin.macro';
++import Button from '@/components/elements/Button';
++import { SocketEvent } from '@/components/server/events';
++
++type PopupMode = 'on_first_start' | 'on_console_error';
++
++const storageKey = (identifier: string, mode: PopupMode) => `ptero:popup-modal:${mode}:${identifier}`;
++const powerActionKey = (identifier: string) => `ptero:popup-modal:power_action:${identifier}`;
++
++const hasValue = (value: string | null) => Boolean(value && value.trim().length > 0);
++
++const isErrorLikeLine = (line: string) => /(error|exception|fatal|failed|panic|traceback)/i.test(line);
++
++const FirstRunPopupFeature = () => {
++    const serverIdentifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
++    const runtimeStatus = ServerContext.useStoreState((state) => state.status.value);
++    const firstStartTitle = ServerContext.useStoreState((state) => state.server.data!.popupOnFirstStartTitle);
++    const firstStartContent = ServerContext.useStoreState((state) => state.server.data!.popupOnFirstStartContent);
++    const errorTitle = ServerContext.useStoreState((state) => state.server.data!.popupOnConsoleErrorTitle);
++    const errorContent = ServerContext.useStoreState((state) => state.server.data!.popupOnConsoleErrorContent);
++    const { connected, instance } = ServerContext.useStoreState((state) => state.socket);
++
++    const hasFirstStartPopup = useMemo(
++        () => hasValue(firstStartTitle) || hasValue(firstStartContent),
++        [firstStartTitle, firstStartContent]
++    );
++
++    const hasConsoleErrorPopup = useMemo(
++        () => hasValue(errorTitle) || hasValue(errorContent),
++        [errorTitle, errorContent]
++    );
++
++    const [activePopup, setActivePopup] = useState<PopupMode | null>(null);
++
++    useEffect(() => {
++        if (!hasFirstStartPopup) {
++            return;
++        }
++
++        if (runtimeStatus === 'installing' || runtimeStatus === 'install_failed' || runtimeStatus === 'reinstall_failed') {
++            localStorage.removeItem(storageKey(String(serverIdentifier), 'on_first_start'));
++            localStorage.removeItem(powerActionKey(String(serverIdentifier)));
++        }
++    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
++
++    useEffect(() => {
++        const identifier = String(serverIdentifier);
++        if (
++            hasFirstStartPopup
++            && runtimeStatus === 'starting'
++            && localStorage.getItem(powerActionKey(identifier)) === '1'
++            && localStorage.getItem(storageKey(identifier, 'on_first_start')) !== '1'
++        ) {
++            setActivePopup((current) => current ?? 'on_first_start');
++        }
++    }, [serverIdentifier, runtimeStatus, hasFirstStartPopup]);
++
++    useEffect(() => {
++        if (!connected || !instance) {
++            return;
++        }
++
++        const identifier = String(serverIdentifier);
++        const handleInstallStarted = () => {
++            // Reinstall should count as a fresh first run.
++            localStorage.removeItem(storageKey(identifier, 'on_first_start'));
++            localStorage.removeItem(powerActionKey(identifier));
++        };
++
++        instance.addListener(SocketEvent.INSTALL_STARTED, handleInstallStarted);
++
++        return () => {
++            instance.removeListener(SocketEvent.INSTALL_STARTED, handleInstallStarted);
++        };
++    }, [connected, instance, serverIdentifier]);
++
++    useEffect(() => {
++        if (!connected || !instance || !hasConsoleErrorPopup) {
++            return;
++        }
++
++        const identifier = String(serverIdentifier);
++        const listener = (line: string) => {
++            if (activePopup || localStorage.getItem(storageKey(identifier, 'on_console_error')) === '1') {
++                return;
++            }
++
++            if (isErrorLikeLine(line)) {
++                setActivePopup('on_console_error');
++            }
++        };
++
++        instance.addListener(SocketEvent.CONSOLE_OUTPUT, listener);
++
++        return () => {
++            instance.removeListener(SocketEvent.CONSOLE_OUTPUT, listener);
++        };
++    }, [connected, instance, hasConsoleErrorPopup, serverIdentifier, activePopup]);
++
++    if (!activePopup) {
++        return null;
++    }
++
++    const title = activePopup === 'on_console_error' ? errorTitle : firstStartTitle;
++    const content = activePopup === 'on_console_error' ? errorContent : firstStartContent;
++
++    const dismiss = () => {
++        localStorage.setItem(storageKey(String(serverIdentifier), activePopup), '1');
++        localStorage.removeItem(powerActionKey(String(serverIdentifier)));
++        setActivePopup(null);
++    };
++
++    return (
++        <Modal visible={true} onDismissed={dismiss} closeOnBackground={false}>
++            <h2 css={tw`text-2xl mb-4 text-neutral-100`}>{title || 'Welcome'}</h2>
++            <p css={tw`text-neutral-200 whitespace-pre-line`}>{(content || '').split(/(https?:\/\/[^\s]+)/gi).map((part, index) => (/^https?:\/\//i.test(part) ? <a key={index} href={part} target="_blank" rel="noopener noreferrer" css={tw`text-blue-300 underline break-all hover:text-blue-200`}>{part}</a> : part))}</p>
++            <div css={tw`mt-8 sm:flex items-center justify-end`}>
++                <Button onClick={dismiss} css={tw`w-full sm:w-auto`}>
++                    Continue
++                </Button>
++            </div>
++        </Modal>
++    );
++};
++
++export { FirstRunPopupFeature };
++export default FirstRunPopupFeature;
+diff --git a/resources/scripts/components/server/InstallListener.tsx b/resources/scripts/components/server/InstallListener.tsx
+index 28ca553..3dbeb6d 100644
+--- a/resources/scripts/components/server/InstallListener.tsx
++++ b/resources/scripts/components/server/InstallListener.tsx
+@@ -7,6 +7,7 @@ import { getDirectorySwrKey } from '@/plugins/useFileManagerSwr';
+ const InstallListener = () => {
+     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
+     const getServer = ServerContext.useStoreActions((actions) => actions.server.getServer);
++    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
+     const setServerFromState = ServerContext.useStoreActions((actions) => actions.server.setServerFromState);
+ 
+     useWebsocketEvent(SocketEvent.BACKUP_RESTORE_COMPLETED, () => {
+@@ -24,6 +25,10 @@ const InstallListener = () => {
+     // When we see the install started event immediately update the state to indicate such so that the
+     // screens automatically update.
+     useWebsocketEvent(SocketEvent.INSTALL_STARTED, () => {
++        const firstStartPopupStorageKey = `ptero:popup-modal:on_first_start:${identifier}`;
++        const powerActionStorageKey = `ptero:popup-modal:power_action:${identifier}`;
++        localStorage.removeItem(firstStartPopupStorageKey);
++        localStorage.removeItem(powerActionStorageKey);
+         setServerFromState((s) => ({ ...s, status: 'installing' }));
+     });
+ 
+diff --git a/resources/scripts/components/server/settings/ReinstallServerBox.tsx b/resources/scripts/components/server/settings/ReinstallServerBox.tsx
+index ff08007..f0d5b5f 100644
+--- a/resources/scripts/components/server/settings/ReinstallServerBox.tsx
++++ b/resources/scripts/components/server/settings/ReinstallServerBox.tsx
+@@ -10,12 +10,17 @@ import { Dialog } from '@/components/elements/dialog';
+ 
+ export default () => {
+     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
++    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
+     const [modalVisible, setModalVisible] = useState(false);
+     const { addFlash, clearFlashes } = useStoreActions((actions: Actions<ApplicationStore>) => actions.flashes);
+ 
+     const reinstall = () => {
+         clearFlashes('settings');
++        const popupStorageKey = `ptero:popup-modal:on_first_start:${identifier}`;
++        const powerActionStorageKey = `ptero:popup-modal:power_action:${identifier}`;
+         reinstallServer(uuid)
+             .then(() => {
++                localStorage.removeItem(popupStorageKey);
++                localStorage.removeItem(powerActionStorageKey);
+                 addFlash({
+                     key: 'settings',
+                     type: 'success',
+
+diff --git a/resources/scripts/components/server/console/PowerButtons.tsx b/resources/scripts/components/server/console/PowerButtons.tsx
+index 55c59bc..fbc6a92 100644
+--- a/resources/scripts/components/server/console/PowerButtons.tsx
++++ b/resources/scripts/components/server/console/PowerButtons.tsx
+@@ -13,17 +13,26 @@ export default ({ className }: PowerButtonProps) => {
+     const [open, setOpen] = useState(false);
+     const status = ServerContext.useStoreState((state) => state.status.value);
++    const identifier = ServerContext.useStoreState((state) => state.server.data!.identifier);
+     const instance = ServerContext.useStoreState((state) => state.socket.instance);
+
+     const killable = status === 'stopping';
++    const markPowerAction = (action: PowerAction | 'kill-confirmed') => {
++        if (action === 'start' || action === 'restart') {
++            const key = `ptero:popup-modal:power_action:${identifier}`;
++            localStorage.setItem(key, '1');
++        }
++    };
++
+     const onButtonClick = (
+         action: PowerAction | 'kill-confirmed',
+         e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+     ): void => {
+         e.preventDefault();
+         if (action === 'kill') {
+             return setOpen(true);
+         }
+
+         if (instance) {
+             setOpen(false);
++            markPowerAction(action);
+             instance.send('set state', action === 'kill-confirmed' ? 'kill' : action);
+         }
+     };
+
+diff --git a/resources/scripts/components/server/features/index.ts b/resources/scripts/components/server/features/index.ts
+index d9bdf07..32ed161 100644
+--- a/resources/scripts/components/server/features/index.ts
++++ b/resources/scripts/components/server/features/index.ts
+@@ -8,6 +8,7 @@ import { ComponentType, lazy } from 'react';
+  */
+ const features: Record<string, ComponentType> = {
+     eula: lazy(() => import('@feature/eula/EulaModalFeature')),
++    popup_modals: lazy(() => import('@feature/FirstRunPopupFeature').then((module) => ({ default: module.default || module.FirstRunPopupFeature || (() => null) }))),
+     java_version: lazy(() => import('@feature/JavaVersionModalFeature')),
+     gsl_token: lazy(() => import('@feature/GSLTokenModalFeature')),
+     pid_limit: lazy(() => import('@feature/PIDLimitModalFeature')),
+diff --git a/resources/views/admin/eggs/popup.blade.php b/resources/views/admin/eggs/popup.blade.php
+new file mode 100644
+index 0000000..ec95c1b
+--- /dev/null
++++ b/resources/views/admin/eggs/popup.blade.php
+@@ -0,0 +1,74 @@
++@extends('layouts.admin')
++
++@section('title')
++    Nests &rarr; Egg: {{ $egg->name }} &rarr; Popup Modal &rarr; {{ $popup['name'] }}
++@endsection
++
++@section('content-header')
++    <h1>{{ $egg->name }}<small>Configure popup behavior for {{ strtolower($popup['name']) }}.</small></h1>
++    <ol class="breadcrumb">
++        <li><a href="{{ route('admin.index') }}">Admin</a></li>
++        <li><a href="{{ route('admin.nests') }}">Nests</a></li>
++        <li><a href="{{ route('admin.nests.view', $egg->nest->id) }}">{{ $egg->nest->name }}</a></li>
++        <li><a href="{{ route('admin.nests.egg.view', $egg->id) }}">{{ $egg->name }}</a></li>
++        <li><a href="{{ route('admin.nests.egg.popup', $egg->id) }}">Popup Modals</a></li>
++        <li class="active">{{ $popup['name'] }}</li>
++    </ol>
++@endsection
++
++@section('content')
++<div class="row">
++    <div class="col-xs-12">
++        <div class="nav-tabs-custom nav-tabs-floating">
++            <ul class="nav nav-tabs">
++                <li><a href="{{ route('admin.nests.egg.view', $egg->id) }}">Configuration</a></li>
++                <li><a href="{{ route('admin.nests.egg.variables', $egg->id) }}">Variables</a></li>
++                <li><a href="{{ route('admin.nests.egg.scripts', $egg->id) }}">Install Script</a></li>
++                <li class="active"><a href="{{ route('admin.nests.egg.popup', $egg->id) }}">Popup Modal</a></li>
++            </ul>
++        </div>
++    </div>
++</div>
++<form action="{{ route('admin.nests.egg.popup.update', [$egg->id, $popupKey]) }}" method="POST">
++    <div class="row">
++        <div class="col-xs-12">
++            <div class="box">
++                <div class="box-header with-border">
++                    <h3 class="box-title">{{ $popup['name'] }}</h3>
++                </div>
++                <div class="box-body">
++                    <div class="form-group">
++                        <label for="pFirstRunPopupTitle" class="control-label">Title</label>
++                        <input
++                            type="text"
++                            id="pFirstRunPopupTitle"
++                            name="title"
++                            class="form-control"
++                            value="{{ old('title', $titleValue) }}"
++                            maxlength="191"
++                        />
++                        <p class="text-muted small">Shown as the popup heading.</p>
++                    </div>
++                    <div class="form-group no-margin-bottom">
++                        <label for="pFirstRunPopupContent" class="control-label">Content</label>
++                        <textarea
++                            id="pFirstRunPopupContent"
++                            name="content"
++                            class="form-control"
++                            rows="8"
++                        >{{ old('content', $contentValue) }}</textarea>
++                        <p class="text-muted small no-margin-bottom">
++                            {{ $popup['description'] }} Leave both fields empty to disable this popup.
++                        </p>
++                    </div>
++                </div>
++                <div class="box-footer">
++                    {!! csrf_field() !!}
++                    <a href="{{ route('admin.nests.egg.popup', $egg->id) }}" class="btn btn-default btn-sm">Back to Popup List</a>
++                    <button type="submit" name="_method" value="PATCH" class="btn btn-primary btn-sm pull-right">Save</button>
++                </div>
++            </div>
++        </div>
++    </div>
++</form>
++@endsection
+diff --git a/resources/views/admin/eggs/popups.blade.php b/resources/views/admin/eggs/popups.blade.php
+new file mode 100644
+index 0000000..ac9953f
+--- /dev/null
++++ b/resources/views/admin/eggs/popups.blade.php
+@@ -0,0 +1,53 @@
++@extends('layouts.admin')
++
++@section('title')
++    Nests &rarr; Egg: {{ $egg->name }} &rarr; Popup Modals
++@endsection
++
++@section('content-header')
++    <h1>{{ $egg->name }}<small>Choose a popup to configure.</small></h1>
++    <ol class="breadcrumb">
++        <li><a href="{{ route('admin.index') }}">Admin</a></li>
++        <li><a href="{{ route('admin.nests') }}">Nests</a></li>
++        <li><a href="{{ route('admin.nests.view', $egg->nest->id) }}">{{ $egg->nest->name }}</a></li>
++        <li><a href="{{ route('admin.nests.egg.view', $egg->id) }}">{{ $egg->name }}</a></li>
++        <li class="active">Popup Modals</li>
++    </ol>
++@endsection
++
++@section('content')
++<div class="row">
++    <div class="col-xs-12">
++        <div class="nav-tabs-custom nav-tabs-floating">
++            <ul class="nav nav-tabs">
++                <li><a href="{{ route('admin.nests.egg.view', $egg->id) }}">Configuration</a></li>
++                <li><a href="{{ route('admin.nests.egg.variables', $egg->id) }}">Variables</a></li>
++                <li><a href="{{ route('admin.nests.egg.scripts', $egg->id) }}">Install Script</a></li>
++                <li class="active"><a href="{{ route('admin.nests.egg.popup', $egg->id) }}">Popup Modal</a></li>
++            </ul>
++        </div>
++    </div>
++</div>
++<div class="row">
++    @foreach ($popups as $popup)
++        <div class="col-sm-6">
++            <div class="box box-{{ $popup['is_configured'] ? 'success' : 'default' }}">
++                <div class="box-header with-border">
++                    <h3 class="box-title">{{ $popup['name'] }}</h3>
++                    <span class="label label-{{ $popup['is_configured'] ? 'success' : 'default' }} pull-right">
++                        {{ $popup['is_configured'] ? 'Configured' : 'Disabled' }}
++                    </span>
++                </div>
++                <div class="box-body">
++                    <p class="text-muted no-margin-bottom">{{ $popup['description'] }}</p>
++                </div>
++                <div class="box-footer">
++                    <a href="{{ route('admin.nests.egg.popup.view', [$egg->id, $popup['key']]) }}" class="btn btn-primary btn-sm pull-right">
++                        Configure
++                    </a>
++                </div>
++            </div>
++        </div>
++    @endforeach
++</div>
++@endsection
+diff --git a/resources/views/admin/eggs/scripts.blade.php b/resources/views/admin/eggs/scripts.blade.php
+index 5bbc9ee..b6de534 100644
+--- a/resources/views/admin/eggs/scripts.blade.php
++++ b/resources/views/admin/eggs/scripts.blade.php
+@@ -23,6 +23,7 @@
+                 <li><a href="{{ route('admin.nests.egg.view', $egg->id) }}">Configuration</a></li>
+                 <li><a href="{{ route('admin.nests.egg.variables', $egg->id) }}">Variables</a></li>
+                 <li class="active"><a href="{{ route('admin.nests.egg.scripts', $egg->id) }}">Install Script</a></li>
++                <li><a href="{{ route('admin.nests.egg.popup', $egg->id) }}">Popup Modal</a></li>
+             </ul>
+         </div>
+     </div>
+diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
+index fbc1478..ad71300 100644
+--- a/resources/views/admin/eggs/variables.blade.php
++++ b/resources/views/admin/eggs/variables.blade.php
+@@ -23,6 +23,7 @@
+                 <li><a href="{{ route('admin.nests.egg.view', $egg->id) }}">Configuration</a></li>
+                 <li class="active"><a href="{{ route('admin.nests.egg.variables', $egg->id) }}">Variables</a></li>
+                 <li><a href="{{ route('admin.nests.egg.scripts', $egg->id) }}">Install Script</a></li>
++                <li><a href="{{ route('admin.nests.egg.popup', $egg->id) }}">Popup Modal</a></li>
+             </ul>
+         </div>
+     </div>
+diff --git a/resources/views/admin/eggs/view.blade.php b/resources/views/admin/eggs/view.blade.php
+index 0f1e652..284ee97 100644
+--- a/resources/views/admin/eggs/view.blade.php
++++ b/resources/views/admin/eggs/view.blade.php
+@@ -22,6 +22,7 @@
+                 <li class="active"><a href="{{ route('admin.nests.egg.view', $egg->id) }}">Configuration</a></li>
+                 <li><a href="{{ route('admin.nests.egg.variables', $egg->id) }}">Variables</a></li>
+                 <li><a href="{{ route('admin.nests.egg.scripts', $egg->id) }}">Install Script</a></li>
++                <li><a href="{{ route('admin.nests.egg.popup', $egg->id) }}">Popup Modal</a></li>
+             </ul>
+         </div>
+     </div>
+diff --git a/routes/admin.php b/routes/admin.php
+index a1e102e..25ee492 100644
+--- a/routes/admin.php
++++ b/routes/admin.php
+@@ -209,6 +209,8 @@ Route::group(['prefix' => 'nests'], function () {
+     Route::get('/egg/{egg:id}/export', [Admin\Nests\EggShareController::class, 'export'])->name('admin.nests.egg.export');
+     Route::get('/egg/{egg:id}/variables', [Admin\Nests\EggVariableController::class, 'view'])->name('admin.nests.egg.variables');
+     Route::get('/egg/{egg:id}/scripts', [Admin\Nests\EggScriptController::class, 'index'])->name('admin.nests.egg.scripts');
++    Route::get('/egg/{egg:id}/popup', [Admin\Nests\EggPopupController::class, 'index'])->name('admin.nests.egg.popup');
++    Route::get('/egg/{egg:id}/popup/{popupKey}', [Admin\Nests\EggPopupController::class, 'view'])->name('admin.nests.egg.popup.view');
+ 
+     Route::post('/new', [Admin\Nests\NestController::class, 'store']);
+     Route::post('/import', [Admin\Nests\EggShareController::class, 'import'])->name('admin.nests.egg.import');
+@@ -220,6 +222,7 @@ Route::group(['prefix' => 'nests'], function () {
+     Route::patch('/view/{nest:id}', [Admin\Nests\NestController::class, 'update']);
+     Route::patch('/egg/{egg:id}', [Admin\Nests\EggController::class, 'update']);
+     Route::patch('/egg/{egg:id}/scripts', [Admin\Nests\EggScriptController::class, 'update']);
++    Route::patch('/egg/{egg:id}/popup/{popupKey}', [Admin\Nests\EggPopupController::class, 'update'])->name('admin.nests.egg.popup.update');
+     Route::patch('/egg/{egg:id}/variables/{variable:id}', [Admin\Nests\EggVariableController::class, 'update'])->name('admin.nests.egg.variables.edit');
+ 
+     Route::delete('/view/{nest:id}', [Admin\Nests\NestController::class, 'destroy']);
