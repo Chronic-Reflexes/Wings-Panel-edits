@@ -29,7 +29,7 @@ diff --git a/app/Models/EggVariable.php b/app/Models/EggVariable.php
      protected $attributes = [
          'user_editable' => 0,
          'user_viewable' => 0,
-+        'dropdown_options' => [],
++        'dropdown_options' => '[]',
      ];
  
      public function getRequiredAttribute(): bool
