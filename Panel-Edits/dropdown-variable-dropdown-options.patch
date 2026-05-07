@@ -170,7 +170,7 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
                          <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
                          <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
                      </div>
-@@ -131,13 +140,65 @@
+@@ -131,13 +140,67 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
@@ -204,6 +204,7 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +                    <label class="control-label">Dropdown Variables</label>
 +                    <div id="createDropdownItemsContainer"></div>
 +                    <button type="button" class="btn btn-xs btn-default" id="addCreateDropdownItem">Create Dropdown Variable</button>
++                    <button type="button" class="btn btn-xs btn-info" id="addCreateCustomDropdownItem" style="margin-left: 5px;">Add User Defined Variable</button>
 +                    <p class="text-muted small">Add dropdown variables in this popup and save them back into the create variable form.</p>
 +                </div>
 +            </div>
@@ -228,6 +229,7 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +                    <label class="control-label">Dropdown Variables</label>
 +                    <div id="editDropdownItemsContainer"></div>
 +                    <button type="button" class="btn btn-xs btn-default" id="addEditDropdownItem">Add Dropdown Variable</button>
++                    <button type="button" class="btn btn-xs btn-info" id="addEditCustomDropdownItem" style="margin-left: 5px;">Add User Defined Variable</button>
 +                </div>
 +            </div>
 +            <div class="modal-footer">
@@ -237,7 +239,7 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
          </div>
      </div>
  </div>
-@@ -146,6 +207,81 @@
+@@ -146,6 +207,100 @@
  @section('footer-scripts')
      @parent
      <script>
@@ -256,6 +258,17 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +                .append("<input type=\"hidden\" name=\"dropdown_options[]\" class=\"dropdown-option-value\" value=\"" + escapeDropdownValue(value) + "\" />");
 +        }
 +
++        function addCustomDropdownModalItem(containerSelector) {
++            const container = $(containerSelector);
++            const existingCustomOption = container.find(".create-dropdown-value").filter(function () {
++                return ($(this).val() || '').toString().trim().toLowerCase() === 'custom';
++            });
++
++            if (existingCustomOption.length === 0) {
++                container.append(buildDropdownModalItem('custom'));
++            }
++        }
++
 +        $("#createDropdownModal").on("show.bs.modal", function () {
 +            const target = $("#createDropdownItemsContainer").empty();
 +            $("#newVariableDropdownItemsContainer .dropdown-option-value").each(function () {
@@ -265,6 +278,10 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +
 +        $("#addCreateDropdownItem").on("click", function () {
 +            $("#createDropdownItemsContainer").append(buildDropdownModalItem(''));
++        });
++
++        $("#addCreateCustomDropdownItem").on("click", function () {
++            addCustomDropdownModalItem("#createDropdownItemsContainer");
 +        });
 +
 +        $("#saveCreateDropdownItems").on("click", function () {
@@ -293,6 +310,10 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +
 +        $("#addEditDropdownItem").on("click", function () {
 +            $("#editDropdownItemsContainer").append(buildDropdownModalItem(''));
++        });
++
++        $("#addEditCustomDropdownItem").on("click", function () {
++            addCustomDropdownModalItem("#editDropdownItemsContainer");
 +        });
 +
 +        $("#saveEditDropdownItems").on("click", function () {
@@ -342,32 +363,108 @@ diff --git a/resources/scripts/api/transformers.ts b/resources/scripts/api/trans
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -54,6 +54,7 @@
+@@ -1,4 +1,4 @@
+-import React, { memo, useState } from 'react';
++import React, { memo, useEffect, useState } from 'react';
+ import { ServerEggVariable } from '@/api/server/types';
+ import TitledGreyBox from '@/components/elements/TitledGreyBox';
+ import { usePermissions } from '@/plugins/usePermissions';
+@@ -14,6 +14,8 @@ interface Props {
+     variable: ServerEggVariable;
+ }
+ 
++const CUSTOM_DROPDOWN_OPTION = 'custom';
++
+ const VariableBox = ({ variable }: Props) => {
+     const FLASH_KEY = `server:startup:${variable.envVariable}`;
+ 
+@@ -54,8 +56,33 @@ const VariableBox = ({ variable }: Props) => {
      const useSwitch = variable.rules.some(
          (v) => v === 'boolean' || v === 'in:0,1' || v === 'in:1,0' || v === 'in:true,false' || v === 'in:false,true'
      );
 +    const dropdownOptions = variable.dropdownOptions || [];
++    const hasCustomDropdownOption = dropdownOptions.includes(CUSTOM_DROPDOWN_OPTION);
++    const presetDropdownOptions = dropdownOptions.filter((option) => option !== CUSTOM_DROPDOWN_OPTION);
++    const resolvedValue = variable.serverValue ?? variable.defaultValue ?? '';
++    const [customValue, setCustomValue] = useState(resolvedValue);
++    const [isCustomDropdownEntry, setIsCustomDropdownEntry] = useState(
++        hasCustomDropdownOption && !presetDropdownOptions.includes(resolvedValue)
++    );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
++
++    useEffect(() => {
++        setCustomValue(resolvedValue);
++        setIsCustomDropdownEntry(hasCustomDropdownOption && !presetDropdownOptions.includes(resolvedValue));
++    }, [resolvedValue, hasCustomDropdownOption, presetDropdownOptions.join('|')]);
++
++    const handleDropdownChange = (value: string) => {
++        if (value === CUSTOM_DROPDOWN_OPTION && hasCustomDropdownOption) {
++            setIsCustomDropdownEntry(true);
++            setCustomValue(presetDropdownOptions.includes(resolvedValue) ? '' : resolvedValue);
++            return;
++        }
++
++        setIsCustomDropdownEntry(false);
++        setCustomValue(value);
++        setVariableValue(value);
++    };
  
-@@ -91,7 +92,20 @@
+     return (
+         <TitledGreyBox
+@@ -91,7 +113,55 @@ const VariableBox = ({ variable }: Props) => {
                      </>
                  ) : (
                      <>
 -                        {selectValues.length > 0 ? (
 +                        {dropdownOptions.length > 0 ? (
-+                            <Select
-+                                onChange={(e) => setVariableValue(e.target.value)}
-+                                name={variable.envVariable}
-+                                defaultValue={variable.serverValue ?? variable.defaultValue}
-+                                disabled={!canEdit || !variable.isEditable}
-+                            >
-+                                {dropdownOptions.map((selectValue) => (
-+                                    <option key={selectValue} value={selectValue}>
-+                                        {selectValue}
-+                                    </option>
-+                                ))}
-+                            </Select>
++                            isCustomDropdownEntry && hasCustomDropdownOption ? (
++                                <div style={{ position: 'relative' }}>
++                                    <Input
++                                        onChange={(e) => setCustomValue(e.currentTarget.value)}
++                                        onKeyUp={(e) => {
++                                            if (canEdit && variable.isEditable) {
++                                                setVariableValue(e.currentTarget.value);
++                                            }
++                                        }}
++                                        readOnly={!canEdit || !variable.isEditable}
++                                        name={variable.envVariable}
++                                        value={customValue}
++                                        placeholder={variable.defaultValue}
++                                        style={{ paddingRight: '3.5rem' }}
++                                    />
++                                    <Select
++                                        onChange={(e) => handleDropdownChange(e.target.value)}
++                                        name={`${variable.envVariable}__dropdown_selector`}
++                                        value=""
++                                        disabled={!canEdit || !variable.isEditable}
++                                        aria-label={`${variable.name} preset values`}
++                                        style={{ position: 'absolute', top: 0, right: 0, width: '3.5rem', height: '100%' }}
++                                    >
++                                        <option value="" disabled hidden></option>
++                                        {presetDropdownOptions.map((selectValue) => (
++                                            <option key={selectValue} value={selectValue}>
++                                                {selectValue}
++                                            </option>
++                                        ))}
++                                        <option value={CUSTOM_DROPDOWN_OPTION}>Custom</option>
++                                    </Select>
++                                </div>
++                            ) : (
++                                <Select
++                                    onChange={(e) => handleDropdownChange(e.target.value)}
++                                    name={variable.envVariable}
++                                    value={hasCustomDropdownOption && !presetDropdownOptions.includes(resolvedValue) ? CUSTOM_DROPDOWN_OPTION : resolvedValue}
++                                    disabled={!canEdit || !variable.isEditable}
++                                >
++                                    {presetDropdownOptions.map((selectValue) => (
++                                        <option key={selectValue} value={selectValue}>
++                                            {selectValue}
++                                        </option>
++                                    ))}
++                                    {hasCustomDropdownOption && <option value={CUSTOM_DROPDOWN_OPTION}>Custom</option>}
++                                </Select>
++                            )
 +                        ) : selectValues.length > 0 ? (
                              <>
                                  <Select
