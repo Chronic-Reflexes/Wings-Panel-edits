@@ -151,7 +151,7 @@ index 4ab21b1..345c255 100644
                      {!! csrf_field() !!}
                      <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
 -                    <button type="submit" class="btn btn-primary">Create Variable</button>
-+                    <button type="button" class="btn btn-default pull-right open-create-dropdown-modal" style="margin-right: 5px;" data-toggle="modal" data-target="#createDropdownModal">Manage Dropdown</button>
++                    <button type="button" class="btn btn-info pull-right open-create-dropdown-modal" style="margin-right: 5px; min-width: 150px;" data-toggle="modal" data-target="#createDropdownModal">Dropdown Options</button>
 +                    <button type="submit" class="btn btn-primary pull-right">Create Variable</button>
                  </div>
              </form>
@@ -206,7 +206,7 @@ index 4ab21b1..345c255 100644
          function buildDropdownItem(value = '') {
              return $("<div class=\"input-group dropdown-option-item mb-2\">")
 -                .append("<input type=\"text\" class=\"form-control dropdown-option-value\" value=\"" + $("<div/>").text(value).html() + "\" />")
-+                .append("<input type=\"text\" name=\"dropdown_options[]\" class=\"form-control dropdown-option-value\" value=\"" + $("<div/>\").text(value).html() + "\" />")
++                .append("<input type=\"text\" name=\"dropdown_options[]\" class=\"form-control dropdown-option-value\" value=\"" + $("<div/>").text(value).html() + "\" />")
                  .append("<span class=\"input-group-btn\"><button type=\"button\" class=\"btn btn-danger remove-dropdown-item\">Remove</button></span>");
          }
  
