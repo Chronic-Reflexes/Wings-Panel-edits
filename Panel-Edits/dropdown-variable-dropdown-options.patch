@@ -892,14 +892,14 @@ index 602ac21..3a2d799 100644
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -56,6 +56,64 @@
+@@ -56,6 +56,68 @@
      );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
 +
 +
 +
-+    const handleDropdownSelect = (value: string) => {
++    const setRawVariableValue = (value: string) => {
 +        setLoading(true);
 +        clearFlashes(FLASH_KEY);
 +
@@ -907,9 +907,9 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +            .then(([response, invocation]) =>
 +                mutate(
 +                    (data) => ({
-+                        ...data,
++                        ...(data || {} as any),
 +                        invocation,
-+                        variables: (data.variables || []).map((v) =>
++                        variables: ((data || {} as any).variables || []).map((v: any) =>
 +                            v.envVariable === response.envVariable ? response : v
 +                        ),
 +                    }),
@@ -938,7 +938,11 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                <FlashMessageRender byKey={FLASH_KEY} className='mb-2 md:mb-4' />
 +                <InputSpinner visible={loading}>
 +                    <Select
-+                        onChange={(e) => handleDropdownSelect(e.currentTarget.value)}
++                        onChange={(e) => {
++                            if (canEdit && variable.isEditable) {
++                                setRawVariableValue(e.target.value);
++                            }
++                        }}
 +                        name={variable.envVariable}
 +                        defaultValue={variable.serverValue ?? variable.defaultValue}
 +                        disabled={!canEdit || !variable.isEditable}
@@ -957,3 +961,4 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
  
      return (
          <TitledGreyBox
+
