@@ -904,7 +904,7 @@ index cffadd8..22356a1 100644
  
  const VariableBox = ({ variable }: Props) => {
 -    const FLASH_KEY = `server:startup:${variable.envVariable}`;
-+    const FLASH_KEY = \server:startup:\ + variable.envVariable;
++    const FLASH_KEY = 'server:startup:' + variable.envVariable;
  
      const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
      const [loading, setLoading] = useState(false);
