@@ -34,34 +34,64 @@ diff --git a/app/Models/EggVariable.php b/app/Models/EggVariable.php
  
      public function getRequiredAttribute(): bool
 diff --git a/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php b/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
+index d232254..69bc1aa 100644
 --- a/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
 +++ b/app/Http/Requests/Admin/Egg/EggVariableFormRequest.php
-@@ -17,6 +17,9 @@
+@@ -17,6 +17,9 @@ class EggVariableFormRequest extends AdminFormRequest
              'description' => 'sometimes|nullable|string',
              'env_variable' => 'required|regex:/^[\w]{1,191}$/|notIn:' . EggVariable::RESERVED_ENV_NAMES,
              'options' => 'sometimes|required|array',
 +            'dropdown_options' => 'sometimes|nullable|array',
-+            'dropdown_options.*' => 'required|string|max:191',
++            'dropdown_options.*' => 'required|string|max:1024',
 +            'dropdown_options_present' => 'sometimes',
              'rules' => 'bail|required|string',
              'default_value' => 'present',
          ];
 diff --git a/app/Services/Eggs/Variables/VariableCreationService.php b/app/Services/Eggs/Variables/VariableCreationService.php
+index 601a351..504acf6 100644
 --- a/app/Services/Eggs/Variables/VariableCreationService.php
 +++ b/app/Services/Eggs/Variables/VariableCreationService.php
-@@ -46,6 +46,11 @@
+@@ -46,6 +46,39 @@ class VariableCreationService
          }
  
          $options = array_get($data, 'options') ?? [];
 +        $dropdownOptions = array_values(array_filter(array_map(static function ($dropdownOption) {
-+            return is_scalar($dropdownOption) ? trim((string) $dropdownOption) : '';
++            if (is_array($dropdownOption)) {
++                $label = trim((string) array_get($dropdownOption, 'label', ''));
++                $value = trim((string) array_get($dropdownOption, 'value', $label));
++            } elseif (is_scalar($dropdownOption)) {
++                $decoded = json_decode((string) $dropdownOption, true);
++                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
++                    $label = trim((string) array_get($decoded, 'label', ''));
++                    $value = trim((string) array_get($decoded, 'value', $label));
++                } else {
++                    $label = trim((string) $dropdownOption);
++                    $value = $label;
++                }
++            } else {
++                return null;
++            }
++
++            if ($label === '' && $value === '') {
++                return null;
++            }
++
++            if ($label === '') {
++                $label = $value;
++            }
++
++            if ($value === '') {
++                $value = $label;
++            }
++
++            return ['label' => $label, 'value' => $value];
 +        }, array_get($data, 'dropdown_options') ?? []), static function ($dropdownOption) {
-+            return $dropdownOption !== '';
++            return !is_null($dropdownOption);
 +        }));
  
          return $this->repository->create([
              'egg_id' => $egg,
-@@ -56,6 +57,7 @@
+@@ -56,6 +89,7 @@ class VariableCreationService
              'user_viewable' => in_array('user_viewable', $options),
              'user_editable' => in_array('user_editable', $options),
              'rules' => $data['rules'] ?? '',
@@ -70,26 +100,83 @@ diff --git a/app/Services/Eggs/Variables/VariableCreationService.php b/app/Servi
      }
  }
 diff --git a/app/Services/Eggs/Variables/VariableUpdateService.php b/app/Services/Eggs/Variables/VariableUpdateService.php
+index c3ca303..29ac5f8 100644
 --- a/app/Services/Eggs/Variables/VariableUpdateService.php
 +++ b/app/Services/Eggs/Variables/VariableUpdateService.php
-@@ -65,6 +65,16 @@
+@@ -65,6 +65,72 @@ class VariableUpdateService
          }
  
          $options = array_get($data, 'options') ?? [];
 +        $hasDropdownOptions = array_key_exists('dropdown_options_present', $data);
 +        $dropdownOptions = $hasDropdownOptions ? array_values(array_filter(array_map(static function ($dropdownOption) {
-+            return is_scalar($dropdownOption) ? trim((string) $dropdownOption) : '';
++            if (is_array($dropdownOption)) {
++                $label = trim((string) array_get($dropdownOption, 'label', ''));
++                $value = trim((string) array_get($dropdownOption, 'value', $label));
++            } elseif (is_scalar($dropdownOption)) {
++                $decoded = json_decode((string) $dropdownOption, true);
++                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
++                    $label = trim((string) array_get($decoded, 'label', ''));
++                    $value = trim((string) array_get($decoded, 'value', $label));
++                } else {
++                    $label = trim((string) $dropdownOption);
++                    $value = $label;
++                }
++            } else {
++                return null;
++            }
++
++            if ($label === '' && $value === '') {
++                return null;
++            }
++
++            if ($label === '') {
++                $label = $value;
++            }
++
++            if ($value === '') {
++                $value = $label;
++            }
++
++            return ['label' => $label, 'value' => $value];
 +        }, array_get($data, 'dropdown_options') ?? []), static function ($dropdownOption) {
-+            return $dropdownOption !== '';
++            return !is_null($dropdownOption);
 +        })) : array_values(array_filter(array_map(static function ($dropdownOption) {
-+            return is_scalar($dropdownOption) ? trim((string) $dropdownOption) : '';
++            if (is_array($dropdownOption)) {
++                $label = trim((string) array_get($dropdownOption, 'label', ''));
++                $value = trim((string) array_get($dropdownOption, 'value', $label));
++            } elseif (is_scalar($dropdownOption)) {
++                $decoded = json_decode((string) $dropdownOption, true);
++                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
++                    $label = trim((string) array_get($decoded, 'label', ''));
++                    $value = trim((string) array_get($decoded, 'value', $label));
++                } else {
++                    $label = trim((string) $dropdownOption);
++                    $value = $label;
++                }
++            } else {
++                return null;
++            }
++
++            if ($label === '' && $value === '') {
++                return null;
++            }
++
++            if ($label === '') {
++                $label = $value;
++            }
++
++            if ($value === '') {
++                $value = $label;
++            }
++
++            return ['label' => $label, 'value' => $value];
 +        }, $variable->dropdown_options ?? []), static function ($dropdownOption) {
-+            return $dropdownOption !== '';
++            return !is_null($dropdownOption);
 +        }));
  
          return $this->repository->withoutFreshModel()->update($variable->id, [
              'name' => $data['name'] ?? '',
-@@ -74,6 +76,7 @@
+@@ -74,6 +140,7 @@ class VariableUpdateService
              'user_viewable' => in_array('user_viewable', $options),
              'user_editable' => in_array('user_editable', $options),
              'rules' => $data['rules'] ?? '',
@@ -98,14 +185,43 @@ diff --git a/app/Services/Eggs/Variables/VariableUpdateService.php b/app/Service
      }
  }
 diff --git a/app/Transformers/Api/Client/EggVariableTransformer.php b/app/Transformers/Api/Client/EggVariableTransformer.php
+index 09c3442..940be85 100644
 --- a/app/Transformers/Api/Client/EggVariableTransformer.php
 +++ b/app/Transformers/Api/Client/EggVariableTransformer.php
-@@ -27,6 +27,11 @@
+@@ -27,6 +27,39 @@ class EggVariableTransformer extends BaseClientTransformer
              'default_value' => $variable->default_value,
              'server_value' => $variable->server_value,
              'is_editable' => $variable->user_editable,
 +            'dropdown_options' => collect($variable->dropdown_options ?? [])->map(function ($dropdownOption) {
-+                return is_scalar($dropdownOption) ? (string) $dropdownOption : null;
++                if (is_array($dropdownOption)) {
++                    $label = trim((string) array_get($dropdownOption, 'label', ''));
++                    $value = trim((string) array_get($dropdownOption, 'value', $label));
++                } elseif (is_scalar($dropdownOption)) {
++                    $decoded = json_decode((string) $dropdownOption, true);
++                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
++                        $label = trim((string) array_get($decoded, 'label', ''));
++                        $value = trim((string) array_get($decoded, 'value', $label));
++                    } else {
++                        $label = trim((string) $dropdownOption);
++                        $value = $label;
++                    }
++                } else {
++                    return null;
++                }
++
++                if ($label === '' && $value === '') {
++                    return null;
++                }
++
++                if ($label === '') {
++                    $label = $value;
++                }
++
++                if ($value === '') {
++                    $value = $label;
++                }
++
++                return ['label' => $label, 'value' => $value];
 +            })->filter(function ($dropdownOption) {
 +                return !is_null($dropdownOption);
 +            })->values()->all(),
@@ -146,21 +262,50 @@ new file mode 100644
 +    }
 +}
 diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
+index fbc1478..c1fc180 100644
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
-@@ -78,9 +78,22 @@
+@@ -78,9 +78,50 @@
                              <input type="text" name="rules" class="form-control" value="{{ $variable->rules }}" />
                              <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                          </div>
 +                        <input type="hidden" name="dropdown_options_present" value="1" />
 +                        <div id="existingVariableDropdownItemsContainer-{{ $variable->id }}" class="hidden">
 +                            @foreach(collect($variable->dropdown_options ?? [])->map(function ($dropdownOption) {
-+                                return is_scalar($dropdownOption) ? (string) $dropdownOption : null;
++                                if (is_array($dropdownOption)) {
++                                    $label = trim((string) array_get($dropdownOption, 'label', ''));
++                                    $value = trim((string) array_get($dropdownOption, 'value', $label));
++                                } elseif (is_scalar($dropdownOption)) {
++                                    $decoded = json_decode((string) $dropdownOption, true);
++                                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
++                                        $label = trim((string) array_get($decoded, 'label', ''));
++                                        $value = trim((string) array_get($decoded, 'value', $label));
++                                    } else {
++                                        $label = trim((string) $dropdownOption);
++                                        $value = $label;
++                                    }
++                                } else {
++                                    return null;
++                                }
++
++                                if ($label === '' && $value === '') {
++                                    return null;
++                                }
++
++                                if ($label === '') {
++                                    $label = $value;
++                                }
++
++                                if ($value === '') {
++                                    $value = $label;
++                                }
++
++                                return ['label' => $label, 'value' => $value];
 +                            })->filter(function ($dropdownOption) {
 +                                return !is_null($dropdownOption);
 +                            })->values() as $dropdownOption)
 +                                <div class="dropdown-option-item">
-+                                    <input type="hidden" name="dropdown_options[]" class="dropdown-option-value" value="{{ $dropdownOption }}" />
++                                    <input type="hidden" name="dropdown_options[]" class="dropdown-option-value" value="{{ json_encode($dropdownOption) }}" />
 +                                </div>
 +                            @endforeach
 +                        </div>
@@ -171,7 +316,7 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
                          <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
                          <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
                      </div>
-@@ -131,13 +140,67 @@
+@@ -131,21 +172,282 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
@@ -189,9 +334,9 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +                    <button type="submit" class="btn btn-primary pull-right">Create Variable</button>
                  </div>
              </form>
-+        </div>
-+    </div>
-+</div>
+         </div>
+     </div>
+ </div>
 +
 +<div class="modal fade" id="createDropdownModal" tabindex="-1" role="dialog">
 +    <div class="modal-dialog" role="document">
@@ -237,10 +382,11 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +                <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
 +                <button type="button" class="btn btn-primary" id="saveEditDropdownItems">Save</button>
 +            </div>
-         </div>
-     </div>
- </div>
-@@ -146,6 +207,104 @@
++        </div>
++    </div>
++</div>
+ @endsection
+ 
  @section('footer-scripts')
      @parent
      <script>
@@ -248,37 +394,125 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +            return $("<div/>").text(value).html();
 +        }
 +
-+        function buildDropdownModalItem(value = '') {
-+            return $("<div class=\"input-group dropdown-option-item\" style=\"margin-bottom: 5px;\">")
-+                .append("<input type=\"text\" class=\"form-control create-dropdown-value\" value=\"" + escapeDropdownValue(value) + "\" />")
-+                .append("<span class=\"input-group-btn\"><button type=\"button\" class=\"btn btn-danger remove-dropdown-item\">Remove</button></span>");
++        function normalizeDropdownOption(option = null) {
++            if (option === undefined || option === null) {
++                return null;
++            }
++
++            let title = '';
++            let variable = '';
++
++            if (typeof option === 'object' && !Array.isArray(option)) {
++                title = ((option.label ?? option.title) ?? '').toString().trim();
++                variable = ((option.value ?? option.variable) ?? '').toString().trim();
++            } else {
++                title = option.toString().trim();
++                variable = title;
++            }
++
++            if (title.length === 0 && variable.length === 0) {
++                return null;
++            }
++
++            if (title.length === 0) {
++                title = variable;
++            }
++
++            if (variable.length === 0) {
++                variable = title;
++            }
++
++            return { label: title, value: variable };
 +        }
 +
-+        function buildDropdownHiddenItem(value = '') {
++        function parseDropdownOption(value = '') {
++            if (value === undefined || value === null) {
++                return null;
++            }
++
++            const trimmed = value.toString().trim();
++            if (!trimmed.length) {
++                return null;
++            }
++
++            try {
++                return normalizeDropdownOption(JSON.parse(trimmed));
++            } catch (error) {
++                return normalizeDropdownOption(trimmed);
++            }
++        }
++
++        function encodeDropdownOption(option = null) {
++            const normalized = normalizeDropdownOption(option);
++            return normalized ? JSON.stringify(normalized) : '';
++        }
++
++        function formatDropdownOptionSummary(option = null) {
++            const normalized = normalizeDropdownOption(option);
++            if (!normalized) {
++                return 'New Dropdown Variable';
++            }
++
++            return normalized.label === normalized.value ? normalized.label : `${normalized.label} -> ${normalized.value}`;
++        }
++
++        function refreshDropdownModalItem(item) {
++            const title = item.find('.dropdown-option-title-input').val();
++            const variable = item.find('.dropdown-option-variable-input').val();
++            item.find('.dropdown-option-summary-text').val(formatDropdownOptionSummary({ label: title, value: variable }));
++        }
++
++        function buildDropdownModalItem(option = null, expanded = false) {
++            const normalized = normalizeDropdownOption(option) || { label: '', value: '' };
++            const editor = $('<div class="dropdown-option-editor" style="display: none; margin-top: 8px;">')
++                .append('<div class="form-group" style="margin-bottom: 8px;"><label class="control-label">Title</label><input type="text" class="form-control dropdown-option-title-input" placeholder="Display name" value="' + escapeDropdownValue(normalized.label) + '" /></div>')
++                .append('<div class="form-group" style="margin-bottom: 0;"><label class="control-label">Variable</label><input type="text" class="form-control dropdown-option-variable-input" placeholder="Defaults to title if blank" value="' + escapeDropdownValue(normalized.value === normalized.label ? '' : normalized.value) + '" /></div>');
++
++            const item = $('<div class="dropdown-option-item" style="margin-bottom: 5px;">')
++                .append(
++                    $('<div class="input-group">')
++                        .append('<input type="text" class="form-control dropdown-option-summary-text" readonly value="' + escapeDropdownValue(formatDropdownOptionSummary(normalized)) + '" />')
++                        .append('<span class="input-group-btn"><button type="button" class="btn btn-default toggle-dropdown-item">Edit</button><button type="button" class="btn btn-danger remove-dropdown-item">Remove</button></span>')
++                )
++                .append(editor);
++
++            if (expanded) {
++                editor.show();
++                item.find('.toggle-dropdown-item').text('Hide');
++            }
++
++            return item;
++        }
++
++        function buildDropdownHiddenItem(option = null) {
++            const encoded = encodeDropdownOption(option);
 +            return $("<div class=\"dropdown-option-item\">")
-+                .append("<input type=\"hidden\" name=\"dropdown_options[]\" class=\"dropdown-option-value\" value=\"" + escapeDropdownValue(value) + "\" />");
++                .append("<input type=\"hidden\" name=\"dropdown_options[]\" class=\"dropdown-option-value\" value=\"" + escapeDropdownValue(encoded) + "\" />");
 +        }
 +
 +        function addCustomDropdownModalItem(containerSelector) {
 +            const container = $(containerSelector);
-+            const existingCustomOption = container.find(".create-dropdown-value").filter(function () {
++            const existingCustomOption = container.find('.dropdown-option-title-input, .dropdown-option-variable-input').filter(function () {
 +                return ($(this).val() || '').toString().trim().toLowerCase() === 'custom';
 +            });
 +
 +            if (existingCustomOption.length === 0) {
-+                container.append(buildDropdownModalItem('custom'));
++                container.append(buildDropdownModalItem({ label: 'Custom', value: 'custom' }, true));
 +            }
 +        }
 +
 +        $("#createDropdownModal").on("show.bs.modal", function () {
 +            const target = $("#createDropdownItemsContainer").empty();
 +            $("#newVariableDropdownItemsContainer .dropdown-option-value").each(function () {
-+                target.append(buildDropdownModalItem($(this).val()));
++                const option = parseDropdownOption($(this).val());
++                if (option) {
++                    target.append(buildDropdownModalItem(option));
++                }
 +            });
 +        });
 +
 +        $("#addCreateDropdownItem").on("click", function () {
-+            $("#createDropdownItemsContainer").append(buildDropdownModalItem(''));
++            $("#createDropdownItemsContainer").append(buildDropdownModalItem(null, true));
 +        });
 +
 +        $("#addCreateCustomDropdownItem").on("click", function () {
@@ -287,10 +521,13 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +
 +        $("#saveCreateDropdownItems").on("click", function () {
 +            const target = $("#newVariableDropdownItemsContainer").empty();
-+            $("#createDropdownItemsContainer .create-dropdown-value").each(function () {
-+                const value = $(this).val();
-+                if (value !== undefined && value !== null && value.toString().trim().length > 0) {
-+                    target.append(buildDropdownHiddenItem(value.toString()));
++            $("#createDropdownItemsContainer .dropdown-option-item").each(function () {
++                const item = $(this);
++                const title = (item.find('.dropdown-option-title-input').val() || '').toString().trim();
++                const variable = (item.find('.dropdown-option-variable-input').val() || '').toString().trim();
++                const option = normalizeDropdownOption({ label: title, value: variable });
++                if (option) {
++                    target.append(buildDropdownHiddenItem(option));
 +                }
 +            });
 +            $("#createDropdownModal").modal('hide');
@@ -305,12 +542,15 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +            $(this).data("sourceContainer", source);
 +
 +            source.find(".dropdown-option-value").each(function () {
-+                target.append(buildDropdownModalItem($(this).val()));
++                const option = parseDropdownOption($(this).val());
++                if (option) {
++                    target.append(buildDropdownModalItem(option));
++                }
 +            });
 +        });
 +
 +        $("#addEditDropdownItem").on("click", function () {
-+            $("#editDropdownItemsContainer").append(buildDropdownModalItem(''));
++            $("#editDropdownItemsContainer").append(buildDropdownModalItem(null, true));
 +        });
 +
 +        $("#addEditCustomDropdownItem").on("click", function () {
@@ -324,10 +564,13 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +            }
 +
 +            source.empty();
-+            $("#editDropdownItemsContainer .create-dropdown-value").each(function () {
-+                const value = $(this).val();
-+                if (value !== undefined && value !== null && value.toString().trim().length > 0) {
-+                    source.append(buildDropdownHiddenItem(value.toString()));
++            $("#editDropdownItemsContainer .dropdown-option-item").each(function () {
++                const item = $(this);
++                const title = (item.find('.dropdown-option-title-input').val() || '').toString().trim();
++                const variable = (item.find('.dropdown-option-variable-input').val() || '').toString().trim();
++                const option = normalizeDropdownOption({ label: title, value: variable });
++                if (option) {
++                    source.append(buildDropdownHiddenItem(option));
 +                }
 +            });
 +
@@ -342,30 +585,68 @@ diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/ad
 +            $(this).closest(".dropdown-option-item").remove();
 +        });
 +
++        $("#createDropdownItemsContainer, #editDropdownItemsContainer").on("click", ".toggle-dropdown-item", function () {
++            const item = $(this).closest('.dropdown-option-item');
++            const editor = item.find('.dropdown-option-editor');
++            const isVisible = editor.is(':visible');
++            editor.toggle(!isVisible);
++            $(this).text(isVisible ? 'Edit' : 'Hide');
++        });
++
++        $("#createDropdownItemsContainer, #editDropdownItemsContainer").on("input", ".dropdown-option-title-input, .dropdown-option-variable-input", function () {
++            refreshDropdownModalItem($(this).closest('.dropdown-option-item'));
++        });
++
          $('.pOptions').select2();
          $('[data-action="delete"]').on('mouseenter', function (event) {
              $(this).find('i').html(' Delete Variable');
+
 diff --git a/resources/scripts/api/server/types.d.ts b/resources/scripts/api/server/types.d.ts
 --- a/resources/scripts/api/server/types.d.ts
 +++ b/resources/scripts/api/server/types.d.ts
-@@ -25,5 +25,6 @@
+@@ -18,12 +18,18 @@ export interface ServerBackup {
+     completedAt: Date | null;
+ }
+ 
++export interface ServerEggVariableDropdownOption {
++    label: string;
++    value: string;
++}
++
+ export interface ServerEggVariable {
+     name: string;
+     description: string;
+     envVariable: string;
      defaultValue: string;
      serverValue: string | null;
      isEditable: boolean;
-+    dropdownOptions: string[];
++    dropdownOptions: ServerEggVariableDropdownOption[];
      rules: string[];
  }
 diff --git a/resources/scripts/api/transformers.ts b/resources/scripts/api/transformers.ts
+index 602ac21..3a2d799 100644
 --- a/resources/scripts/api/transformers.ts
 +++ b/resources/scripts/api/transformers.ts
-@@ -73,5 +73,6 @@
+@@ -73,5 +73,17 @@ export const rawDataToServerEggVariable = ({ attributes }: FractalResponseData):
      defaultValue: attributes.default_value,
      serverValue: attributes.server_value,
      isEditable: attributes.is_editable,
-+    dropdownOptions: attributes.dropdown_options || [],
++    dropdownOptions: (attributes.dropdown_options || [])
++        .map((option: unknown) => {
++            if (option && typeof option === 'object' && !Array.isArray(option)) {
++                const label = String((option as { label?: string; value?: string }).label ?? '').trim();
++                const value = String((option as { value?: string; label?: string }).value ?? label).trim();
++                return label || value ? { label: label || value, value: value || label } : null;
++            }
++
++            const rawValue = String(option ?? '').trim();
++            return rawValue ? { label: rawValue, value: rawValue } : null;
++        })
++        .filter((option): option is { label: string; value: string } => option !== null),
      rules: attributes.rules.split('|'),
  });
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
+index cffadd8..d0a315a 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
 @@ -1,4 +1,4 @@
@@ -395,7 +676,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
          setLoading(true);
          clearFlashes(FLASH_KEY);
  
-@@ -49,14 +53,104 @@ const VariableBox = ({ variable }: Props) => {
+@@ -49,14 +53,112 @@ const VariableBox = ({ variable }: Props) => {
                  clearAndAddHttpError({ error, key: FLASH_KEY });
              })
              .then(() => setLoading(false));
@@ -409,12 +690,14 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
          (v) => v === 'boolean' || v === 'in:0,1' || v === 'in:1,0' || v === 'in:true,false' || v === 'in:false,true'
      );
 +    const dropdownOptions = variable.dropdownOptions || [];
-+    const hasCustomDropdownOption = dropdownOptions.includes(CUSTOM_DROPDOWN_OPTION);
-+    const presetDropdownOptions = dropdownOptions.filter((option) => option !== CUSTOM_DROPDOWN_OPTION);
++    const hasCustomDropdownOption = dropdownOptions.some((option) => option.value === CUSTOM_DROPDOWN_OPTION);
++    const presetDropdownOptions = dropdownOptions.filter((option) => option.value !== CUSTOM_DROPDOWN_OPTION);
 +    const resolvedValue = variable.serverValue ?? variable.defaultValue ?? '';
++    const selectedDropdownOption = presetDropdownOptions.find((option) => option.value === resolvedValue);
++    const customDropdownOption = dropdownOptions.find((option) => option.value === CUSTOM_DROPDOWN_OPTION);
 +    const [customValue, setCustomValue] = useState(resolvedValue);
 +    const [isCustomDropdownEntry, setIsCustomDropdownEntry] = useState(
-+        hasCustomDropdownOption && !presetDropdownOptions.includes(resolvedValue)
++        hasCustomDropdownOption && !presetDropdownOptions.some((option) => option.value === resolvedValue)
 +    );
 +    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
      const isStringSwitch = variable.rules.some((v) => v === 'string');
@@ -429,10 +712,16 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +
 +    useEffect(() => {
 +        setCustomValue(resolvedValue);
-+        setIsCustomDropdownEntry(hasCustomDropdownOption && !presetDropdownOptions.includes(resolvedValue));
++        setIsCustomDropdownEntry(
++            hasCustomDropdownOption && !presetDropdownOptions.some((option) => option.value === resolvedValue)
++        );
 +        setIsDropdownOpen(false);
 +        clearPendingCustomValue();
-+    }, [resolvedValue, hasCustomDropdownOption, presetDropdownOptions.join('|')]);
++    }, [
++        resolvedValue,
++        hasCustomDropdownOption,
++        presetDropdownOptions.map((option) => `${option.label}:${option.value}`).join('|'),
++    ]);
 +
 +    useEffect(() => {
 +        return () => {
@@ -488,7 +777,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +
 +        if (value === CUSTOM_DROPDOWN_OPTION && hasCustomDropdownOption) {
 +            setIsCustomDropdownEntry(true);
-+            setCustomValue(presetDropdownOptions.includes(resolvedValue) ? '' : resolvedValue);
++            setCustomValue(presetDropdownOptions.some((option) => option.value === resolvedValue) ? '' : resolvedValue);
 +            return;
 +        }
 +
@@ -500,7 +789,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
      return (
          <TitledGreyBox
              title={
-@@ -91,7 +185,97 @@ const VariableBox = ({ variable }: Props) => {
+@@ -91,7 +193,97 @@ const VariableBox = ({ variable }: Props) => {
                      </>
                  ) : (
                      <>
@@ -562,7 +851,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                                                whiteSpace: 'nowrap',
 +                                            }}
 +                                        >
-+                                            {resolvedValue}
++                                            {selectedDropdownOption?.label ?? resolvedValue}
 +                                        </span>
 +                                        <span className='absolute right-0 top-0 flex h-full w-14 items-center justify-center border-l border-neutral-500 text-neutral-200'>
 +                                            <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>&#9662;</span>
@@ -573,13 +862,13 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                                    <div className='absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded border border-neutral-500 bg-neutral-600 shadow-lg'>
 +                                        {presetDropdownOptions.map((selectValue) => (
 +                                            <button
-+                                                key={selectValue}
++                                                key={`${selectValue.value}:${selectValue.label}`}
 +                                                type='button'
 +                                                className='block w-full border-b border-neutral-500 bg-neutral-600 px-3 py-2 text-left text-sm text-neutral-200 transition-colors duration-150 last:border-b-0 hover:bg-neutral-500'
 +                                                onMouseDown={(e) => e.preventDefault()}
-+                                                onClick={() => handleDropdownChange(selectValue)}
++                                                onClick={() => handleDropdownChange(selectValue.value)}
 +                                            >
-+                                                {selectValue}
++                                                {selectValue.label}
 +                                            </button>
 +                                        ))}
 +                                        {hasCustomDropdownOption && (
@@ -589,7 +878,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                                                onMouseDown={(e) => e.preventDefault()}
 +                                                onClick={() => handleDropdownChange(CUSTOM_DROPDOWN_OPTION)}
 +                                            >
-+                                                Custom
++                                                {customDropdownOption?.label ?? 'Custom'}
 +                                            </button>
 +                                        )}
 +                                    </div>
