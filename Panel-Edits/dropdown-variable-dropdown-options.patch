@@ -892,7 +892,7 @@ index 602ac21..3a2d799 100644
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -56,6 +56,68 @@
+@@ -56,6 +56,77 @@
      );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
@@ -900,11 +900,13 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +
 +
 +    const setRawVariableValue = (value: string) => {
++        console.log('[DROPDOWN DEBUG] setRawVariableValue called - value:', value, 'envVar:', variable.envVariable, 'uuid:', uuid);
 +        setLoading(true);
 +        clearFlashes(FLASH_KEY);
 +
 +        updateStartupVariable(uuid, variable.envVariable, value)
-+            .then(([response, invocation]) =>
++            .then(([response, invocation]) => {
++                console.log('[DROPDOWN DEBUG] API success - response:', response, 'invocation:', invocation);
 +                mutate(
 +                    (data) => ({
 +                        ...(data || {} as any),
@@ -914,13 +916,16 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                        ),
 +                    }),
 +                    false
-+                )
-+            )
++                );
++            })
 +            .catch((error) => {
-+                console.error(error);
++                console.error('[DROPDOWN DEBUG] API error:', error);
 +                clearAndAddHttpError({ error, key: FLASH_KEY });
 +            })
-+            .then(() => setLoading(false));
++            .then(() => {
++                console.log('[DROPDOWN DEBUG] Request completed, setLoading(false)');
++                setLoading(false);
++            });
 +    };
 +
 +    if (variable.dropdownOptions && variable.dropdownOptions.length > 0) {
@@ -939,12 +944,16 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                <InputSpinner visible={loading}>
 +                    <Select
 +                        onChange={(e) => {
++                            const selectedValue = e.target.value;
++                            console.log('[DROPDOWN DEBUG] onChange fired - selectedValue:', selectedValue, 'canEdit:', canEdit, 'isEditable:', variable.isEditable);
 +                            if (canEdit && variable.isEditable) {
-+                                setRawVariableValue(e.target.value);
++                                setRawVariableValue(selectedValue);
++                            } else {
++                                console.warn('[DROPDOWN DEBUG] Change blocked - canEdit:', canEdit, 'isEditable:', variable.isEditable);
 +                            }
 +                        }}
 +                        name={variable.envVariable}
-+                        defaultValue={variable.serverValue ?? variable.defaultValue}
++                        value={variable.serverValue ?? variable.defaultValue}
 +                        disabled={!canEdit || !variable.isEditable}
 +                    >
 +                        {variable.dropdownOptions.map((option, i) => (
