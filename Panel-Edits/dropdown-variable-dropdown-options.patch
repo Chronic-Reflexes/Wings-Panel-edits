@@ -889,10 +889,10 @@ index 602ac21..3a2d799 100644
      rules: attributes.rules.split('|'),
  });
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..84d1323 100644
+index cffadd8..924bc4b 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,136 +1,209 @@
+@@ -1,136 +1,222 @@
 -import React, { memo, useState } from 'react';
 +import React, { memo, useEffect, useState } from 'react';
  import { ServerEggVariable } from '@/api/server/types';
@@ -961,22 +961,30 @@ index cffadd8..84d1323 100644
 +    const hasCustomDropdownOption = dropdownOptions.some((option) => option.value === CUSTOM_DROPDOWN_OPTION);
 +    const presetDropdownOptions = dropdownOptions.filter((option) => option.value !== CUSTOM_DROPDOWN_OPTION);
 +    const resolvedValue = variable.serverValue ?? variable.defaultValue ?? '';
++    const hasResolvedPresetDropdownValue = presetDropdownOptions.some((option) => option.value === resolvedValue);
 +    const customDropdownOption = dropdownOptions.find((option) => option.value === CUSTOM_DROPDOWN_OPTION);
 +    const [customValue, setCustomValue] = useState(resolvedValue);
 +    const [isCustomDropdownEntry, setIsCustomDropdownEntry] = useState(
-+        hasCustomDropdownOption && !presetDropdownOptions.some((option) => option.value === resolvedValue)
++        hasCustomDropdownOption && resolvedValue.length > 0 && !hasResolvedPresetDropdownValue
 +    );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
- 
++    const selectedDropdownValue = isCustomDropdownEntry && hasCustomDropdownOption
++        ? CUSTOM_DROPDOWN_OPTION
++        : hasResolvedPresetDropdownValue
++            ? resolvedValue
++            : '';
++    const showDropdownPlaceholder = !isCustomDropdownEntry && presetDropdownOptions.length > 0 && !hasResolvedPresetDropdownValue;
++
 +    useEffect(() => {
 +        setCustomValue(resolvedValue);
 +        setIsCustomDropdownEntry(
-+            hasCustomDropdownOption && !presetDropdownOptions.some((option) => option.value === resolvedValue)
++            hasCustomDropdownOption && resolvedValue.length > 0 && !hasResolvedPresetDropdownValue
 +        );
 +    }, [
 +        resolvedValue,
 +        hasCustomDropdownOption,
++        hasResolvedPresetDropdownValue,
 +        presetDropdownOptions.map((option) => `${option.label}:${option.value}`).join('|'),
 +    ]);
 +
@@ -991,7 +999,7 @@ index cffadd8..84d1323 100644
 +        setCustomValue(value);
 +        setVariableValue(value);
 +    };
-+
+ 
      return (
          <TitledGreyBox
              title={
@@ -1032,9 +1040,14 @@ index cffadd8..84d1323 100644
 +                                <Select
 +                                    onChange={(e) => handleDropdownChange(e.target.value)}
 +                                    name={variable.envVariable}
-+                                    value={isCustomDropdownEntry && hasCustomDropdownOption ? CUSTOM_DROPDOWN_OPTION : resolvedValue}
++                                    value={selectedDropdownValue}
 +                                    disabled={!canEdit || !variable.isEditable}
 +                                >
++                                    {showDropdownPlaceholder && (
++                                        <option value='' disabled>
++                                            {variable.defaultValue || 'Select a value'}
++                                        </option>
++                                    )}
 +                                    {presetDropdownOptions.map((option) => (
 +                                        <option key={`${option.value}:${option.label}`} value={option.value}>
 +                                            {option.label}
