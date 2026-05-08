@@ -262,7 +262,7 @@ new file mode 100644
 +    }
 +}
 diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
-index fbc1478..5d4aa54 100644
+index fbc1478..166d080 100644
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
 @@ -78,9 +78,50 @@
@@ -316,7 +316,7 @@ index fbc1478..5d4aa54 100644
                          <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
                          <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
                      </div>
-@@ -131,21 +172,284 @@
+@@ -131,21 +172,307 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
@@ -456,19 +456,37 @@ index fbc1478..5d4aa54 100644
 +            return normalized.label === normalized.value ? normalized.label : `${normalized.label} -> ${normalized.value}`;
 +        }
 +
++        function getDropdownModalItemOption(item) {
++            const editor = item.find('.dropdown-option-editor');
++            const title = editor.is(':visible')
++                ? (item.find('.dropdown-option-summary-text').val() || '').toString().trim()
++                : (item.data('dropdownTitle') || '').toString().trim();
++            const variable = (item.find('.dropdown-option-variable-input').val() || '').toString().trim();
++
++            return normalizeDropdownOption({ label: title, value: variable });
++        }
++
 +        function refreshDropdownModalItem(item) {
-+            const title = item.find('.dropdown-option-title-input').val();
-+            const variable = item.find('.dropdown-option-variable-input').val();
-+            item.find('.dropdown-option-summary-text').val(formatDropdownOptionSummary({ label: title, value: variable }));
++            const editor = item.find('.dropdown-option-editor');
++            const titleInput = item.find('.dropdown-option-summary-text');
++            const variableInput = item.find('.dropdown-option-variable-input');
++            const option = getDropdownModalItemOption(item);
++
++            item.data('dropdownTitle', option ? option.label : '');
++            titleInput.prop('readonly', !editor.is(':visible'));
++            titleInput.attr('placeholder', editor.is(':visible') ? 'Title' : '');
++            titleInput.val(editor.is(':visible') ? (option ? option.label : '') : formatDropdownOptionSummary(option));
++            variableInput.attr('placeholder', 'Variable');
++            variableInput.val(option && option.value !== option.label ? option.value : '');
 +        }
 +
 +        function buildDropdownModalItem(option = null, expanded = false) {
 +            const normalized = normalizeDropdownOption(option) || { label: '', value: '' };
-+            const editor = $('<div class="dropdown-option-editor" style="display: none; margin-top: 8px;">')
-+                .append('<div class="form-group" style="margin-bottom: 8px;"><label class="control-label">Title</label><input type="text" class="form-control dropdown-option-title-input" placeholder="Display name" value="' + escapeDropdownValue(normalized.label) + '" /></div>')
-+                .append('<div class="form-group" style="margin-bottom: 0;"><label class="control-label">Variable</label><input type="text" class="form-control dropdown-option-variable-input" placeholder="Defaults to title if blank" value="' + escapeDropdownValue(normalized.value === normalized.label ? '' : normalized.value) + '" /></div>');
++            const editor = $('<div class="dropdown-option-editor" style="display: none; margin-top: 5px;">')
++                .append('<input type="text" class="form-control dropdown-option-variable-input" placeholder="Variable" value="' + escapeDropdownValue(normalized.value === normalized.label ? '' : normalized.value) + '" />');
 +
 +            const item = $('<div class="dropdown-option-item" style="margin-bottom: 5px;">')
++                .data('dropdownTitle', normalized.label)
 +                .append(
 +                    $('<div class="input-group">')
 +                        .append('<input type="text" class="form-control dropdown-option-summary-text" readonly value="' + escapeDropdownValue(formatDropdownOptionSummary(normalized)) + '" />')
@@ -480,6 +498,8 @@ index fbc1478..5d4aa54 100644
 +                editor.show();
 +                item.find('.toggle-dropdown-item').text('Hide');
 +            }
++
++            refreshDropdownModalItem(item);
 +
 +            return item;
 +        }
@@ -494,8 +514,12 @@ index fbc1478..5d4aa54 100644
 +
 +        function addCustomDropdownModalItem(containerSelector) {
 +            const container = $(containerSelector);
-+            const existingCustomOption = container.find('.dropdown-option-title-input, .dropdown-option-variable-input').filter(function () {
-+                return ($(this).val() || '').toString().trim().toLowerCase() === 'custom';
++            const existingCustomOption = container.find('.dropdown-option-item').filter(function () {
++                const option = getDropdownModalItemOption($(this));
++                return option && (
++                    option.label.toLowerCase() === 'custom'
++                    || option.value.toLowerCase() === 'custom'
++                );
 +            });
 +
 +            if (existingCustomOption.length === 0) {
@@ -524,10 +548,7 @@ index fbc1478..5d4aa54 100644
 +        $("#saveCreateDropdownItems").on("click", function () {
 +            const target = $("#newVariableDropdownItemsContainer").empty();
 +            $("#createDropdownItemsContainer .dropdown-option-item").each(function () {
-+                const item = $(this);
-+                const title = (item.find('.dropdown-option-title-input').val() || '').toString().trim();
-+                const variable = (item.find('.dropdown-option-variable-input').val() || '').toString().trim();
-+                const option = normalizeDropdownOption({ label: title, value: variable });
++                const option = getDropdownModalItemOption($(this));
 +                if (option) {
 +                    target.append(buildDropdownHiddenItem(option));
 +                }
@@ -567,10 +588,7 @@ index fbc1478..5d4aa54 100644
 +
 +            source.empty();
 +            $("#editDropdownItemsContainer .dropdown-option-item").each(function () {
-+                const item = $(this);
-+                const title = (item.find('.dropdown-option-title-input').val() || '').toString().trim();
-+                const variable = (item.find('.dropdown-option-variable-input').val() || '').toString().trim();
-+                const option = normalizeDropdownOption({ label: title, value: variable });
++                const option = getDropdownModalItemOption($(this));
 +                if (option) {
 +                    source.append(buildDropdownHiddenItem(option));
 +                }
@@ -593,9 +611,14 @@ index fbc1478..5d4aa54 100644
 +            const isVisible = editor.is(':visible');
 +            editor.toggle(!isVisible);
 +            $(this).text(isVisible ? 'Edit' : 'Hide');
++            refreshDropdownModalItem(item);
++
++            if (!isVisible) {
++                item.find('.dropdown-option-summary-text').trigger('focus');
++            }
 +        });
 +
-+        $("#createDropdownItemsContainer, #editDropdownItemsContainer").on("input", ".dropdown-option-title-input, .dropdown-option-variable-input", function () {
++        $("#createDropdownItemsContainer, #editDropdownItemsContainer").on("input", ".dropdown-option-summary-text, .dropdown-option-variable-input", function () {
 +            refreshDropdownModalItem($(this).closest('.dropdown-option-item'));
 +        });
 +
