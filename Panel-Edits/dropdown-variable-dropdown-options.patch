@@ -889,97 +889,13 @@ index 602ac21..3a2d799 100644
      rules: attributes.rules.split('|'),
  });
 
-diff --git a/resources/scripts/state/server/index.ts b/resources/scripts/state/server/index.ts
-index f9806b6..c64028e 100644
---- a/resources/scripts/state/server/index.ts
-+++ b/resources/scripts/state/server/index.ts
-@@ -76,6 +76,22 @@ const status: ServerStatusStore = {
-     }),
- };
- 
-+interface ServerStartupStore {
-+    pendingUpdates: number;
-+    incrementPendingUpdates: Action<ServerStartupStore>;
-+    decrementPendingUpdates: Action<ServerStartupStore>;
-+}
-+
-+const startup: ServerStartupStore = {
-+    pendingUpdates: 0,
-+    incrementPendingUpdates: action((state) => {
-+        state.pendingUpdates += 1;
-+    }),
-+    decrementPendingUpdates: action((state) => {
-+        state.pendingUpdates = Math.max(0, state.pendingUpdates - 1);
-+    }),
-+};
-+
- export interface ServerStore {
-     server: ServerDataStore;
-     subusers: ServerSubuserStore;
-@@ -84,6 +100,7 @@ export interface ServerStore {
-     schedules: ServerScheduleStore;
-     socket: SocketStore;
-     status: ServerStatusStore;
-+    startup: ServerStartupStore;
-     clearServerState: Action<ServerStore>;
- }
- 
-@@ -96,6 +113,7 @@ export const ServerContext = createContextStore<ServerStore>(
-         files,
-         subusers,
-         schedules,
-+        startup,
-         clearServerState: action((state) => {
-             state.server.data = undefined;
-             state.server.permissions = [];
-@@ -104,6 +122,7 @@ export const ServerContext = createContextStore<ServerStore>(
-             state.files.directory = '/';
-             state.files.selectedFiles = [];
-             state.schedules.data = [];
-+            state.startup.pendingUpdates = 0;
- 
-             if (state.socket.instance) {
-                 state.socket.instance.removeAllListeners();
-diff --git a/resources/scripts/components/server/console/PowerButtons.tsx b/resources/scripts/components/server/console/PowerButtons.tsx
-index f5f8189..757164d 100644
---- a/resources/scripts/components/server/console/PowerButtons.tsx
-+++ b/resources/scripts/components/server/console/PowerButtons.tsx
-@@ -13,8 +13,11 @@ export default ({ className }: PowerButtonProps) => {
-     const [open, setOpen] = useState(false);
-     const status = ServerContext.useStoreState((state) => state.status.value);
-     const instance = ServerContext.useStoreState((state) => state.socket.instance);
-+    const pendingStartupUpdates = ServerContext.useStoreState((state) => state.startup.pendingUpdates);
- 
-     const killable = status === 'stopping';
-+    const startDisabled = status !== 'offline' || pendingStartupUpdates > 0;
-+    const restartDisabled = !status || pendingStartupUpdates > 0;
-     const onButtonClick = (
-         action: PowerAction | 'kill-confirmed',
-         e: React.MouseEvent<HTMLButtonElement, MouseEvent>
-@@ -51,14 +54,14 @@ export default ({ className }: PowerButtonProps) => {
-             <Can action={'control.start'}>
-                 <Button
-                     className={'flex-1'}
--                    disabled={status !== 'offline'}
-+                    disabled={startDisabled}
-                     onClick={onButtonClick.bind(this, 'start')}
-                 >
-                     Start
-                 </Button>
-             </Can>
-             <Can action={'control.restart'}>
--                <Button.Text className={'flex-1'} disabled={!status} onClick={onButtonClick.bind(this, 'restart')}>
-+                <Button.Text className={'flex-1'} disabled={restartDisabled} onClick={onButtonClick.bind(this, 'restart')}>
-                     Restart
-                 </Button.Text>
-             </Can>
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..d5c9c4c 100644
+index cffadd8..b59f298 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,136 +1,256 @@
+@@ -1,136 +1,225 @@
 -import React, { memo, useState } from 'react';
-+import React, { memo, useEffect, useRef, useState } from 'react';
++import React, { memo, useEffect, useState } from 'react';
  import { ServerEggVariable } from '@/api/server/types';
  import TitledGreyBox from '@/components/elements/TitledGreyBox';
  import { usePermissions } from '@/plugins/usePermissions';
@@ -1009,16 +925,9 @@ index cffadd8..d5c9c4c 100644
      const [canEdit] = usePermissions(['startup.update']);
      const { clearFlashes, clearAndAddHttpError } = useFlash();
      const { mutate } = getServerStartup(uuid);
-+    const incrementPendingUpdates = ServerContext.useStoreActions((actions) => actions.startup.incrementPendingUpdates);
-+    const decrementPendingUpdates = ServerContext.useStoreActions((actions) => actions.startup.decrementPendingUpdates);
-+    const queuedSaveRef = useRef(false);
  
--    const setVariableValue = debounce((value: string) => {
-+    const setRawVariableValue = (value: string, isQueuedSave = false) => {
+     const setVariableValue = debounce((value: string) => {
          setLoading(true);
-+        if (!isQueuedSave) {
-+            incrementPendingUpdates();
-+        }
          clearFlashes(FLASH_KEY);
  
          updateStartupVariable(uuid, variable.envVariable, value)
@@ -1038,35 +947,9 @@ index cffadd8..d5c9c4c 100644
                  console.error(error);
                  clearAndAddHttpError({ error, key: FLASH_KEY });
              })
--            .then(() => setLoading(false));
-+            .then(() => setLoading(false))
-+            .finally(() => {
-+                if (isQueuedSave) {
-+                    if (queuedSaveRef.current) {
-+                        queuedSaveRef.current = false;
-+                        decrementPendingUpdates();
-+                    }
-+
-+                    return;
-+                }
-+
-+                decrementPendingUpdates();
-+            });
-+    };
-+
-+    const setVariableValue = debounce((value: string) => {
-+        setRawVariableValue(value, true);
+             .then(() => setLoading(false));
      }, 500);
  
-+    const queueVariableValue = (value: string) => {
-+        if (!queuedSaveRef.current) {
-+            queuedSaveRef.current = true;
-+            incrementPendingUpdates();
-+        }
-+
-+        setVariableValue(value);
-+    };
-+
      const useSwitch = variable.rules.some(
          (v) => v === 'boolean' || v === 'in:0,1' || v === 'in:1,0' || v === 'in:true,false' || v === 'in:false,true'
      );
@@ -1114,7 +997,7 @@ index cffadd8..d5c9c4c 100644
 +        setIsCustomDropdownEntry(false);
 +        setCurrentValue(value);
 +        setCustomValue(value);
-+        queueVariableValue(value);
++        setVariableValue(value);
 +    };
  
      return (
@@ -1180,7 +1063,7 @@ index cffadd8..d5c9c4c 100644
 +                                    <Input
 +                                        onKeyUp={(e) => {
 +                                            if (canEdit && variable.isEditable) {
-+                                                queueVariableValue(e.currentTarget.value);
++                                                setVariableValue(e.currentTarget.value);
 +                                            }
 +                                        }}
 +                                        onChange={(e) => {
@@ -1198,8 +1081,7 @@ index cffadd8..d5c9c4c 100644
 +                        ) : selectValues.length > 0 ? (
                              <>
                                  <Select
--                                    onChange={(e) => setVariableValue(e.target.value)}
-+                                    onChange={(e) => queueVariableValue(e.target.value)}
+                                     onChange={(e) => setVariableValue(e.target.value)}
                                      name={variable.envVariable}
                                      defaultValue={variable.serverValue ?? variable.defaultValue}
                                      disabled={!canEdit || !variable.isEditable}
@@ -1219,8 +1101,7 @@ index cffadd8..d5c9c4c 100644
                                  <Input
                                      onKeyUp={(e) => {
                                          if (canEdit && variable.isEditable) {
--                                            setVariableValue(e.currentTarget.value);
-+                                            queueVariableValue(e.currentTarget.value);
+                                             setVariableValue(e.currentTarget.value);
                                          }
                                      }}
                                      readOnly={!canEdit || !variable.isEditable}
