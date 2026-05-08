@@ -890,234 +890,71 @@ index 602ac21..3a2d799 100644
  });
 
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..b59f298 100644
+index cffadd8..22356a1 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,136 +1,225 @@
+@@ -1,4 +1,4 @@
 -import React, { memo, useState } from 'react';
-+import React, { memo, useEffect, useState } from 'react';
++import React, { memo, useRef, useState } from 'react';
  import { ServerEggVariable } from '@/api/server/types';
  import TitledGreyBox from '@/components/elements/TitledGreyBox';
  import { usePermissions } from '@/plugins/usePermissions';
- import InputSpinner from '@/components/elements/InputSpinner';
- import Input from '@/components/elements/Input';
- import Switch from '@/components/elements/Switch';
- import { debounce } from 'debounce';
- import updateStartupVariable from '@/api/server/updateStartupVariable';
- import useFlash from '@/plugins/useFlash';
- import FlashMessageRender from '@/components/FlashMessageRender';
- import getServerStartup from '@/api/swr/getServerStartup';
- import Select from '@/components/elements/Select';
- import isEqual from 'react-fast-compare';
- import { ServerContext } from '@/state/server';
- 
- interface Props {
-     variable: ServerEggVariable;
+@@ -19,7 +19,7 @@ interface Props {
  }
  
-+const CUSTOM_DROPDOWN_OPTION = 'custom';
-+
  const VariableBox = ({ variable }: Props) => {
-     const FLASH_KEY = `server:startup:${variable.envVariable}`;
+-    const FLASH_KEY = `server:startup:${variable.envVariable}`;
++    const FLASH_KEY = \server:startup:\ + variable.envVariable;
  
      const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
      const [loading, setLoading] = useState(false);
-     const [canEdit] = usePermissions(['startup.update']);
-     const { clearFlashes, clearAndAddHttpError } = useFlash();
-     const { mutate } = getServerStartup(uuid);
- 
-     const setVariableValue = debounce((value: string) => {
-         setLoading(true);
-         clearFlashes(FLASH_KEY);
- 
-         updateStartupVariable(uuid, variable.envVariable, value)
-             .then(([response, invocation]) =>
-                 mutate(
-                     (data) => ({
-                         ...data,
-                         invocation,
-                         variables: (data.variables || []).map((v) =>
-                             v.envVariable === response.envVariable ? response : v
-                         ),
-                     }),
-                     false
-                 )
-             )
-             .catch((error) => {
-                 console.error(error);
-                 clearAndAddHttpError({ error, key: FLASH_KEY });
-             })
-             .then(() => setLoading(false));
-     }, 500);
- 
-     const useSwitch = variable.rules.some(
-         (v) => v === 'boolean' || v === 'in:0,1' || v === 'in:1,0' || v === 'in:true,false' || v === 'in:false,true'
+@@ -56,6 +56,16 @@ const VariableBox = ({ variable }: Props) => {
      );
-+    const dropdownOptions = variable.dropdownOptions || [];
-+    const hasCustomDropdownOption = dropdownOptions.some((option) => option.value === CUSTOM_DROPDOWN_OPTION);
-+    const presetDropdownOptions = dropdownOptions.filter((option) => option.value !== CUSTOM_DROPDOWN_OPTION);
-+    const resolvedValue = variable.serverValue ?? variable.defaultValue ?? '';
-+    const customDropdownOption = dropdownOptions.find((option) => option.value === CUSTOM_DROPDOWN_OPTION);
-+    const [currentValue, setCurrentValue] = useState(resolvedValue);
-+    const [customValue, setCustomValue] = useState(resolvedValue);
-+    const hasResolvedPresetDropdownValue = presetDropdownOptions.some((option) => option.value === currentValue);
-+    const shouldShowFallbackDropdownValue = currentValue.length > 0 && !hasResolvedPresetDropdownValue && !hasCustomDropdownOption;
-+    const renderedPresetDropdownOptions = shouldShowFallbackDropdownValue
-+        ? [{ label: currentValue, value: currentValue }, ...presetDropdownOptions]
-+        : presetDropdownOptions;
-+    const [isCustomDropdownEntry, setIsCustomDropdownEntry] = useState(
-+        hasCustomDropdownOption && resolvedValue.length > 0 && !presetDropdownOptions.some((option) => option.value === resolvedValue)
-+    );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
-+    const selectedDropdownValue = isCustomDropdownEntry && hasCustomDropdownOption
-+        ? CUSTOM_DROPDOWN_OPTION
-+        : currentValue;
-+    const showDropdownPlaceholder = !isCustomDropdownEntry && renderedPresetDropdownOptions.length > 0 && !currentValue.length;
++    const dropdownOptions = variable.dropdownOptions || [];
++    const inputRef = useRef<HTMLInputElement>(null);
 +
-+    useEffect(() => {
-+        setCurrentValue(resolvedValue);
-+        setCustomValue(resolvedValue);
-+        setIsCustomDropdownEntry(
-+            hasCustomDropdownOption && resolvedValue.length > 0 && !presetDropdownOptions.some((option) => option.value === resolvedValue)
-+        );
-+    }, [
-+        resolvedValue,
-+        hasCustomDropdownOption,
-+        presetDropdownOptions.map((option) => `${option.label}:${option.value}`).join('|'),
-+    ]);
-+
-+    const handleDropdownChange = (value: string) => {
-+        if (value === CUSTOM_DROPDOWN_OPTION && hasCustomDropdownOption) {
-+            setIsCustomDropdownEntry(true);
-+            setCustomValue(hasResolvedPresetDropdownValue ? '' : currentValue);
-+            return;
++    const handleDropdownSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
++        if (!e.target.value || !canEdit || !variable.isEditable) return;
++        if (inputRef.current) {
++            inputRef.current.value = e.target.value;
 +        }
-+
-+        setIsCustomDropdownEntry(false);
-+        setCurrentValue(value);
-+        setCustomValue(value);
-+        setVariableValue(value);
++        setVariableValue(e.target.value);
 +    };
  
      return (
          <TitledGreyBox
-             title={
-                 <p className='text-sm uppercase'>
-                     {!variable.isEditable && (
-                         <span className='bg-neutral-700 text-xs py-1 px-2 rounded-full mr-2 mb-1'>Read Only</span>
-                     )}
-                     {variable.name}
-                 </p>
-             }
-         >
-             <FlashMessageRender byKey={FLASH_KEY} className='mb-2 md:mb-4' />
-             <InputSpinner visible={loading}>
-                 {useSwitch ? (
-                     <>
-                         <Switch
-                             readOnly={!canEdit || !variable.isEditable}
-                             name={variable.envVariable}
-                             defaultChecked={
-                                 isStringSwitch ? variable.serverValue === 'true' : variable.serverValue === '1'
-                             }
-                             onChange={() => {
-                                 if (canEdit && variable.isEditable) {
-                                     if (isStringSwitch) {
-                                         setVariableValue(variable.serverValue === 'true' ? 'false' : 'true');
-                                     } else {
-                                         setVariableValue(variable.serverValue === '1' ? '0' : '1');
-                                     }
-                                 }
-                             }}
-                         />
-                     </>
-                 ) : (
-                     <>
--                        {selectValues.length > 0 ? (
-+                        {dropdownOptions.length > 0 ? (
-+                            <>
-+                                <Select
-+                                    onChange={(e) => handleDropdownChange(e.target.value)}
-+                                    name={variable.envVariable}
-+                                    value={selectedDropdownValue}
-+                                    disabled={!canEdit || !variable.isEditable}
-+                                >
-+                                    {showDropdownPlaceholder && (
-+                                        <option value='' disabled>
-+                                            {variable.defaultValue || 'Select a value'}
-+                                        </option>
-+                                    )}
-+                                    {renderedPresetDropdownOptions.map((option) => (
-+                                        <option key={`${option.value}:${option.label}`} value={option.value}>
-+                                            {option.label}
-+                                        </option>
-+                                    ))}
-+                                    {hasCustomDropdownOption && (
-+                                        <option value={CUSTOM_DROPDOWN_OPTION}>
-+                                            {customDropdownOption?.label ?? 'Custom'}
-+                                        </option>
-+                                    )}
-+                                </Select>
-+                                {isCustomDropdownEntry && hasCustomDropdownOption && (
-+                                    <Input
-+                                        onKeyUp={(e) => {
-+                                            if (canEdit && variable.isEditable) {
-+                                                setVariableValue(e.currentTarget.value);
-+                                            }
-+                                        }}
-+                                        onChange={(e) => {
-+                                            setCurrentValue(e.currentTarget.value);
-+                                            setCustomValue(e.currentTarget.value);
-+                                        }}
-+                                        readOnly={!canEdit || !variable.isEditable}
-+                                        name={variable.envVariable}
-+                                        value={customValue}
-+                                        placeholder={variable.defaultValue}
-+                                        className='mt-2'
-+                                    />
-+                                )}
-+                            </>
-+                        ) : selectValues.length > 0 ? (
-                             <>
-                                 <Select
-                                     onChange={(e) => setVariableValue(e.target.value)}
-                                     name={variable.envVariable}
-                                     defaultValue={variable.serverValue ?? variable.defaultValue}
-                                     disabled={!canEdit || !variable.isEditable}
-                                 >
-                                     {selectValues.map((selectValue) => (
-                                         <option
-                                             key={selectValue.replace('in:', '')}
-                                             value={selectValue.replace('in:', '')}
-                                         >
-                                             {selectValue.replace('in:', '')}
-                                         </option>
-                                     ))}
-                                 </Select>
+@@ -111,7 +121,25 @@ const VariableBox = ({ variable }: Props) => {
                              </>
                          ) : (
                              <>
++                                {dropdownOptions.length > 0 && (
++                                    <Select
++                                        className='mb-2'
++                                        onChange={handleDropdownSelect}
++                                        disabled={!canEdit || !variable.isEditable}
++                                        defaultValue=''
++                                    >
++                                        <option value='' disabled>
++                                            Select a preset...
++                                        </option>
++                                        {dropdownOptions.map((opt) => (
++                                            <option key={opt.value} value={opt.value}>
++                                                {opt.label}
++                                            </option>
++                                        ))}
++                                    </Select>
++                                )}
                                  <Input
++                                    ref={inputRef}
                                      onKeyUp={(e) => {
                                          if (canEdit && variable.isEditable) {
                                              setVariableValue(e.currentTarget.value);
-                                         }
-                                     }}
-                                     readOnly={!canEdit || !variable.isEditable}
-                                     name={variable.envVariable}
-                                     defaultValue={variable.serverValue ?? ''}
-                                     placeholder={variable.defaultValue}
-                                 />
-                             </>
-                         )}
-                     </>
-                 )}
-             </InputSpinner>
- 
-             <p className='mt-1 text-xs text-neutral-300'>{variable.description}</p>
-         </TitledGreyBox>
+@@ -133,4 +161,4 @@ const VariableBox = ({ variable }: Props) => {
      );
  };
  
- export default memo(VariableBox, isEqual);
+-export default memo(VariableBox, isEqual);
++export default memo(VariableBox, isEqual);
+\ No newline at end of file
