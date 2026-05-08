@@ -889,16 +889,28 @@ index 602ac21..3a2d799 100644
      rules: attributes.rules.split('|'),
  });
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..d0a315a 100644
+index cffadd8..84d1323 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,4 +1,4 @@
+@@ -1,136 +1,209 @@
 -import React, { memo, useState } from 'react';
-+import React, { memo, useEffect, useRef, useState } from 'react';
++import React, { memo, useEffect, useState } from 'react';
  import { ServerEggVariable } from '@/api/server/types';
  import TitledGreyBox from '@/components/elements/TitledGreyBox';
  import { usePermissions } from '@/plugins/usePermissions';
-@@ -18,6 +18,8 @@ interface Props {
+ import InputSpinner from '@/components/elements/InputSpinner';
+ import Input from '@/components/elements/Input';
+ import Switch from '@/components/elements/Switch';
+ import { debounce } from 'debounce';
+ import updateStartupVariable from '@/api/server/updateStartupVariable';
+ import useFlash from '@/plugins/useFlash';
+ import FlashMessageRender from '@/components/FlashMessageRender';
+ import getServerStartup from '@/api/swr/getServerStartup';
+ import Select from '@/components/elements/Select';
+ import isEqual from 'react-fast-compare';
+ import { ServerContext } from '@/state/server';
+ 
+ interface Props {
      variable: ServerEggVariable;
  }
  
@@ -907,26 +919,39 @@ index cffadd8..d0a315a 100644
  const VariableBox = ({ variable }: Props) => {
      const FLASH_KEY = `server:startup:${variable.envVariable}`;
  
-@@ -26,8 +28,10 @@ const VariableBox = ({ variable }: Props) => {
+     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
+     const [loading, setLoading] = useState(false);
      const [canEdit] = usePermissions(['startup.update']);
      const { clearFlashes, clearAndAddHttpError } = useFlash();
      const { mutate } = getServerStartup(uuid);
-+    const pendingCustomValueTimeout = useRef<number | null>(null);
-+    const dropdownWrapperRef = useRef<HTMLDivElement | null>(null);
  
 -    const setVariableValue = debounce((value: string) => {
-+    const persistVariableValue = (value: string) => {
++    const setRawVariableValue = (value: string) => {
          setLoading(true);
          clearFlashes(FLASH_KEY);
  
-@@ -49,14 +53,112 @@ const VariableBox = ({ variable }: Props) => {
+         updateStartupVariable(uuid, variable.envVariable, value)
+             .then(([response, invocation]) =>
+                 mutate(
+                     (data) => ({
+                         ...data,
+                         invocation,
+                         variables: (data.variables || []).map((v) =>
+                             v.envVariable === response.envVariable ? response : v
+                         ),
+                     }),
+                     false
+                 )
+             )
+             .catch((error) => {
+                 console.error(error);
                  clearAndAddHttpError({ error, key: FLASH_KEY });
              })
              .then(() => setLoading(false));
 +    };
 +
 +    const setVariableValue = debounce((value: string) => {
-+        persistVariableValue(value);
++        setRawVariableValue(value);
      }, 500);
  
      const useSwitch = variable.rules.some(
@@ -936,88 +961,26 @@ index cffadd8..d0a315a 100644
 +    const hasCustomDropdownOption = dropdownOptions.some((option) => option.value === CUSTOM_DROPDOWN_OPTION);
 +    const presetDropdownOptions = dropdownOptions.filter((option) => option.value !== CUSTOM_DROPDOWN_OPTION);
 +    const resolvedValue = variable.serverValue ?? variable.defaultValue ?? '';
-+    const selectedDropdownOption = presetDropdownOptions.find((option) => option.value === resolvedValue);
 +    const customDropdownOption = dropdownOptions.find((option) => option.value === CUSTOM_DROPDOWN_OPTION);
 +    const [customValue, setCustomValue] = useState(resolvedValue);
 +    const [isCustomDropdownEntry, setIsCustomDropdownEntry] = useState(
 +        hasCustomDropdownOption && !presetDropdownOptions.some((option) => option.value === resolvedValue)
 +    );
-+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
  
-+    const clearPendingCustomValue = () => {
-+        if (pendingCustomValueTimeout.current) {
-+            window.clearTimeout(pendingCustomValueTimeout.current);
-+            pendingCustomValueTimeout.current = null;
-+        }
-+    };
-+
 +    useEffect(() => {
 +        setCustomValue(resolvedValue);
 +        setIsCustomDropdownEntry(
 +            hasCustomDropdownOption && !presetDropdownOptions.some((option) => option.value === resolvedValue)
 +        );
-+        setIsDropdownOpen(false);
-+        clearPendingCustomValue();
 +    }, [
 +        resolvedValue,
 +        hasCustomDropdownOption,
 +        presetDropdownOptions.map((option) => `${option.label}:${option.value}`).join('|'),
 +    ]);
 +
-+    useEffect(() => {
-+        return () => {
-+            clearPendingCustomValue();
-+        };
-+    }, []);
-+
-+    useEffect(() => {
-+        if (!isDropdownOpen) {
-+            return;
-+        }
-+
-+        const handleMouseDown = (event: MouseEvent) => {
-+            const wrapper = dropdownWrapperRef.current;
-+            if (wrapper && !wrapper.contains(event.target as Node)) {
-+                setIsDropdownOpen(false);
-+            }
-+        };
-+
-+        document.addEventListener('mousedown', handleMouseDown);
-+
-+        return () => {
-+            document.removeEventListener('mousedown', handleMouseDown);
-+        };
-+    }, [isDropdownOpen]);
-+
-+    const queueCustomValuePersist = (value: string) => {
-+        clearPendingCustomValue();
-+
-+        if (!canEdit || !variable.isEditable || value === resolvedValue) {
-+            return;
-+        }
-+
-+        pendingCustomValueTimeout.current = window.setTimeout(() => {
-+            pendingCustomValueTimeout.current = null;
-+            persistVariableValue(value);
-+        }, 2500);
-+    };
-+
-+    const saveCustomValue = (value: string) => {
-+        clearPendingCustomValue();
-+
-+        if (!canEdit || !variable.isEditable || value === resolvedValue) {
-+            return;
-+        }
-+
-+        persistVariableValue(value);
-+    };
-+
 +    const handleDropdownChange = (value: string) => {
-+        clearPendingCustomValue();
-+        setIsDropdownOpen(false);
-+
 +        if (value === CUSTOM_DROPDOWN_OPTION && hasCustomDropdownOption) {
 +            setIsCustomDropdownEntry(true);
 +            setCustomValue(presetDropdownOptions.some((option) => option.value === resolvedValue) ? '' : resolvedValue);
@@ -1026,108 +989,119 @@ index cffadd8..d0a315a 100644
 +
 +        setIsCustomDropdownEntry(false);
 +        setCustomValue(value);
-+        persistVariableValue(value);
++        setVariableValue(value);
 +    };
 +
      return (
          <TitledGreyBox
              title={
-@@ -91,7 +193,97 @@ const VariableBox = ({ variable }: Props) => {
+                 <p className='text-sm uppercase'>
+                     {!variable.isEditable && (
+                         <span className='bg-neutral-700 text-xs py-1 px-2 rounded-full mr-2 mb-1'>Read Only</span>
+                     )}
+                     {variable.name}
+                 </p>
+             }
+         >
+             <FlashMessageRender byKey={FLASH_KEY} className='mb-2 md:mb-4' />
+             <InputSpinner visible={loading}>
+                 {useSwitch ? (
+                     <>
+                         <Switch
+                             readOnly={!canEdit || !variable.isEditable}
+                             name={variable.envVariable}
+                             defaultChecked={
+                                 isStringSwitch ? variable.serverValue === 'true' : variable.serverValue === '1'
+                             }
+                             onChange={() => {
+                                 if (canEdit && variable.isEditable) {
+                                     if (isStringSwitch) {
+                                         setVariableValue(variable.serverValue === 'true' ? 'false' : 'true');
+                                     } else {
+                                         setVariableValue(variable.serverValue === '1' ? '0' : '1');
+                                     }
+                                 }
+                             }}
+                         />
                      </>
                  ) : (
                      <>
 -                        {selectValues.length > 0 ? (
 +                        {dropdownOptions.length > 0 ? (
-+                            <div ref={dropdownWrapperRef} style={{ position: 'relative' }}>
-+                                {isCustomDropdownEntry && hasCustomDropdownOption ? (
-+                                    <div style={{ position: 'relative' }}>
-+                                        <Input
-+                                            onChange={(e) => {
-+                                                setCustomValue(e.currentTarget.value);
-+                                                queueCustomValuePersist(e.currentTarget.value);
-+                                            }}
-+                                            onBlur={(e) => saveCustomValue(e.currentTarget.value)}
-+                                            onKeyDown={(e) => {
-+                                                if (e.key === 'Enter') {
-+                                                    e.preventDefault();
-+                                                    saveCustomValue(e.currentTarget.value);
-+                                                }
-+                                            }}
-+                                            readOnly={!canEdit || !variable.isEditable}
-+                                            name={variable.envVariable}
-+                                            value={customValue}
-+                                            placeholder={variable.defaultValue}
-+                                            style={{ paddingRight: '3.5rem' }}
-+                                        />
-+                                        <button
-+                                            type='button'
-+                                            className='absolute right-0 top-0 flex h-full w-14 items-center justify-center rounded-r border-l border-neutral-500 bg-neutral-600 text-neutral-200 transition-colors duration-150 hover:border-neutral-400 disabled:opacity-75'
-+                                            onMouseDown={(e) => {
-+                                                e.preventDefault();
-+                                                if (canEdit && variable.isEditable) {
-+                                                    setIsDropdownOpen(true);
-+                                                }
-+                                            }}
-+                                            disabled={!canEdit || !variable.isEditable}
-+                                            aria-label={`${variable.name} preset values`}
-+                                        >
-+                                            <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>&#9662;</span>
-+                                        </button>
-+                                    </div>
-+                                ) : (
-+                                    <button
-+                                        type='button'
-+                                        className='relative block w-full rounded border border-neutral-500 bg-neutral-600 p-3 text-left text-sm text-neutral-200 transition-colors duration-150 hover:border-neutral-400 disabled:opacity-75'
-+                                        onClick={() => {
++                            <>
++                                <Select
++                                    onChange={(e) => handleDropdownChange(e.target.value)}
++                                    name={variable.envVariable}
++                                    value={isCustomDropdownEntry && hasCustomDropdownOption ? CUSTOM_DROPDOWN_OPTION : resolvedValue}
++                                    disabled={!canEdit || !variable.isEditable}
++                                >
++                                    {presetDropdownOptions.map((option) => (
++                                        <option key={`${option.value}:${option.label}`} value={option.value}>
++                                            {option.label}
++                                        </option>
++                                    ))}
++                                    {hasCustomDropdownOption && (
++                                        <option value={CUSTOM_DROPDOWN_OPTION}>
++                                            {customDropdownOption?.label ?? 'Custom'}
++                                        </option>
++                                    )}
++                                </Select>
++                                {isCustomDropdownEntry && hasCustomDropdownOption && (
++                                    <Input
++                                        onKeyUp={(e) => {
 +                                            if (canEdit && variable.isEditable) {
-+                                                setIsDropdownOpen(true);
++                                                setVariableValue(e.currentTarget.value);
 +                                            }
 +                                        }}
-+                                        disabled={!canEdit || !variable.isEditable}
-+                                    >
-+                                        <span
-+                                            style={{
-+                                                display: 'block',
-+                                                paddingRight: '2.75rem',
-+                                                overflow: 'hidden',
-+                                                textOverflow: 'ellipsis',
-+                                                whiteSpace: 'nowrap',
-+                                            }}
-+                                        >
-+                                            {selectedDropdownOption?.label ?? resolvedValue}
-+                                        </span>
-+                                        <span className='absolute right-0 top-0 flex h-full w-14 items-center justify-center border-l border-neutral-500 text-neutral-200'>
-+                                            <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>&#9662;</span>
-+                                        </span>
-+                                    </button>
++                                        onChange={(e) => setCustomValue(e.currentTarget.value)}
++                                        readOnly={!canEdit || !variable.isEditable}
++                                        name={variable.envVariable}
++                                        value={customValue}
++                                        placeholder={variable.defaultValue}
++                                        className='mt-2'
++                                    />
 +                                )}
-+                                {isDropdownOpen && (
-+                                    <div className='absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded border border-neutral-500 bg-neutral-600 shadow-lg'>
-+                                        {presetDropdownOptions.map((selectValue) => (
-+                                            <button
-+                                                key={`${selectValue.value}:${selectValue.label}`}
-+                                                type='button'
-+                                                className='block w-full border-b border-neutral-500 bg-neutral-600 px-3 py-2 text-left text-sm text-neutral-200 transition-colors duration-150 last:border-b-0 hover:bg-neutral-500'
-+                                                onMouseDown={(e) => e.preventDefault()}
-+                                                onClick={() => handleDropdownChange(selectValue.value)}
-+                                            >
-+                                                {selectValue.label}
-+                                            </button>
-+                                        ))}
-+                                        {hasCustomDropdownOption && (
-+                                            <button
-+                                                type='button'
-+                                                className='block w-full bg-neutral-600 px-3 py-2 text-left text-sm text-neutral-200 transition-colors duration-150 hover:bg-neutral-500'
-+                                                onMouseDown={(e) => e.preventDefault()}
-+                                                onClick={() => handleDropdownChange(CUSTOM_DROPDOWN_OPTION)}
-+                                            >
-+                                                {customDropdownOption?.label ?? 'Custom'}
-+                                            </button>
-+                                        )}
-+                                    </div>
-+                                )}
-+                            </div>
++                            </>
 +                        ) : selectValues.length > 0 ? (
                              <>
                                  <Select
                                      onChange={(e) => setVariableValue(e.target.value)}
+                                     name={variable.envVariable}
+                                     defaultValue={variable.serverValue ?? variable.defaultValue}
+                                     disabled={!canEdit || !variable.isEditable}
+                                 >
+                                     {selectValues.map((selectValue) => (
+                                         <option
+                                             key={selectValue.replace('in:', '')}
+                                             value={selectValue.replace('in:', '')}
+                                         >
+                                             {selectValue.replace('in:', '')}
+                                         </option>
+                                     ))}
+                                 </Select>
+                             </>
+                         ) : (
+                             <>
+                                 <Input
+                                     onKeyUp={(e) => {
+                                         if (canEdit && variable.isEditable) {
+                                             setVariableValue(e.currentTarget.value);
+                                         }
+                                     }}
+                                     readOnly={!canEdit || !variable.isEditable}
+                                     name={variable.envVariable}
+                                     defaultValue={variable.serverValue ?? ''}
+                                     placeholder={variable.defaultValue}
+                                 />
+                             </>
+                         )}
+                     </>
+                 )}
+             </InputSpinner>
+ 
+             <p className='mt-1 text-xs text-neutral-300'>{variable.description}</p>
+         </TitledGreyBox>
+     );
+ };
+ 
+ export default memo(VariableBox, isEqual);
