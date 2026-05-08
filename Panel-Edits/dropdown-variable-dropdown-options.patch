@@ -974,12 +974,12 @@ index f5f8189..757164d 100644
                  </Button.Text>
              </Can>
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..eae0bc7 100644
+index cffadd8..d5c9c4c 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,136 +1,233 @@
+@@ -1,136 +1,256 @@
 -import React, { memo, useState } from 'react';
-+import React, { memo, useEffect, useState } from 'react';
++import React, { memo, useEffect, useRef, useState } from 'react';
  import { ServerEggVariable } from '@/api/server/types';
  import TitledGreyBox from '@/components/elements/TitledGreyBox';
  import { usePermissions } from '@/plugins/usePermissions';
@@ -1011,11 +1011,14 @@ index cffadd8..eae0bc7 100644
      const { mutate } = getServerStartup(uuid);
 +    const incrementPendingUpdates = ServerContext.useStoreActions((actions) => actions.startup.incrementPendingUpdates);
 +    const decrementPendingUpdates = ServerContext.useStoreActions((actions) => actions.startup.decrementPendingUpdates);
++    const queuedSaveRef = useRef(false);
  
 -    const setVariableValue = debounce((value: string) => {
-+    const setRawVariableValue = (value: string) => {
++    const setRawVariableValue = (value: string, isQueuedSave = false) => {
          setLoading(true);
-+        incrementPendingUpdates();
++        if (!isQueuedSave) {
++            incrementPendingUpdates();
++        }
          clearFlashes(FLASH_KEY);
  
          updateStartupVariable(uuid, variable.envVariable, value)
@@ -1037,13 +1040,33 @@ index cffadd8..eae0bc7 100644
              })
 -            .then(() => setLoading(false));
 +            .then(() => setLoading(false))
-+            .finally(() => decrementPendingUpdates());
++            .finally(() => {
++                if (isQueuedSave) {
++                    if (queuedSaveRef.current) {
++                        queuedSaveRef.current = false;
++                        decrementPendingUpdates();
++                    }
++
++                    return;
++                }
++
++                decrementPendingUpdates();
++            });
 +    };
 +
 +    const setVariableValue = debounce((value: string) => {
-+        setRawVariableValue(value);
++        setRawVariableValue(value, true);
      }, 500);
  
++    const queueVariableValue = (value: string) => {
++        if (!queuedSaveRef.current) {
++            queuedSaveRef.current = true;
++            incrementPendingUpdates();
++        }
++
++        setVariableValue(value);
++    };
++
      const useSwitch = variable.rules.some(
          (v) => v === 'boolean' || v === 'in:0,1' || v === 'in:1,0' || v === 'in:true,false' || v === 'in:false,true'
      );
@@ -1091,7 +1114,7 @@ index cffadd8..eae0bc7 100644
 +        setIsCustomDropdownEntry(false);
 +        setCurrentValue(value);
 +        setCustomValue(value);
-+        setRawVariableValue(value);
++        queueVariableValue(value);
 +    };
  
      return (
@@ -1157,7 +1180,7 @@ index cffadd8..eae0bc7 100644
 +                                    <Input
 +                                        onKeyUp={(e) => {
 +                                            if (canEdit && variable.isEditable) {
-+                                                setVariableValue(e.currentTarget.value);
++                                                queueVariableValue(e.currentTarget.value);
 +                                            }
 +                                        }}
 +                                        onChange={(e) => {
@@ -1175,7 +1198,8 @@ index cffadd8..eae0bc7 100644
 +                        ) : selectValues.length > 0 ? (
                              <>
                                  <Select
-                                     onChange={(e) => setVariableValue(e.target.value)}
+-                                    onChange={(e) => setVariableValue(e.target.value)}
++                                    onChange={(e) => queueVariableValue(e.target.value)}
                                      name={variable.envVariable}
                                      defaultValue={variable.serverValue ?? variable.defaultValue}
                                      disabled={!canEdit || !variable.isEditable}
@@ -1195,7 +1219,8 @@ index cffadd8..eae0bc7 100644
                                  <Input
                                      onKeyUp={(e) => {
                                          if (canEdit && variable.isEditable) {
-                                             setVariableValue(e.currentTarget.value);
+-                                            setVariableValue(e.currentTarget.value);
++                                            queueVariableValue(e.currentTarget.value);
                                          }
                                      }}
                                      readOnly={!canEdit || !variable.isEditable}
