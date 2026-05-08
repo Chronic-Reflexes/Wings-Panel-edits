@@ -957,4 +957,3 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
  
      return (
          <TitledGreyBox
-
