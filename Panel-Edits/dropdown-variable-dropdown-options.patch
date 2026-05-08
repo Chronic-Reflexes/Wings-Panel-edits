@@ -262,7 +262,7 @@ new file mode 100644
 +    }
 +}
 diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
-index fbc1478..c1fc180 100644
+index fbc1478..5d4aa54 100644
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
 @@ -78,9 +78,50 @@
@@ -316,7 +316,7 @@ index fbc1478..c1fc180 100644
                          <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
                          <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
                      </div>
-@@ -131,21 +172,282 @@
+@@ -131,21 +172,284 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
@@ -487,7 +487,9 @@ index fbc1478..c1fc180 100644
 +        function buildDropdownHiddenItem(option = null) {
 +            const encoded = encodeDropdownOption(option);
 +            return $("<div class=\"dropdown-option-item\">")
-+                .append("<input type=\"hidden\" name=\"dropdown_options[]\" class=\"dropdown-option-value\" value=\"" + escapeDropdownValue(encoded) + "\" />");
++                .append(
++                    $('<input type="hidden" name="dropdown_options[]" class="dropdown-option-value" />').val(encoded)
++                );
 +        }
 +
 +        function addCustomDropdownModalItem(containerSelector) {
