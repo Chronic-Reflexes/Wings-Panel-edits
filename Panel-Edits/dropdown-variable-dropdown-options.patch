@@ -262,7 +262,7 @@ new file mode 100644
 +    }
 +}
 diff --git a/resources/views/admin/eggs/variables.blade.php b/resources/views/admin/eggs/variables.blade.php
-index fbc1478..166d080 100644
+index fbc1478..a7950fa 100644
 --- a/resources/views/admin/eggs/variables.blade.php
 +++ b/resources/views/admin/eggs/variables.blade.php
 @@ -78,9 +78,50 @@
@@ -316,7 +316,7 @@ index fbc1478..166d080 100644
                          <button class="btn btn-sm btn-primary pull-right" name="_method" value="PATCH" type="submit">Save</button>
                          <button class="btn btn-sm btn-danger pull-left muted muted-hover" data-action="delete" name="_method" value="DELETE" type="submit"><i class="fa fa-trash-o"></i></button>
                      </div>
-@@ -131,21 +172,307 @@
+@@ -131,21 +172,282 @@
                          <input type="text" name="rules" class="form-control" value="{{ old('rules', 'required|string|max:20') }}" placeholder="required|string|max:20" />
                          <p class="text-muted small">These rules are defined using standard <a href="https://laravel.com/docs/5.7/validation#available-validation-rules" target="_blank">Laravel Framework validation rules</a>.</p>
                      </div>
@@ -350,7 +350,6 @@ index fbc1478..166d080 100644
 +                    <label class="control-label">Dropdown Variables</label>
 +                    <div id="createDropdownItemsContainer"></div>
 +                    <button type="button" class="btn btn-xs btn-default" id="addCreateDropdownItem">Create Dropdown Variable</button>
-+                    <button type="button" class="btn btn-xs btn-info" id="addCreateCustomDropdownItem" style="margin-left: 5px;">Add User Defined Variable</button>
 +                    <p class="text-muted small">Add dropdown variables in this popup and save them back into the create variable form.</p>
 +                </div>
 +            </div>
@@ -375,7 +374,6 @@ index fbc1478..166d080 100644
 +                    <label class="control-label">Dropdown Variables</label>
 +                    <div id="editDropdownItemsContainer"></div>
 +                    <button type="button" class="btn btn-xs btn-default" id="addEditDropdownItem">Add Dropdown Variable</button>
-+                    <button type="button" class="btn btn-xs btn-info" id="addEditCustomDropdownItem" style="margin-left: 5px;">Add User Defined Variable</button>
 +                </div>
 +            </div>
 +            <div class="modal-footer">
@@ -512,21 +510,6 @@ index fbc1478..166d080 100644
 +                );
 +        }
 +
-+        function addCustomDropdownModalItem(containerSelector) {
-+            const container = $(containerSelector);
-+            const existingCustomOption = container.find('.dropdown-option-item').filter(function () {
-+                const option = getDropdownModalItemOption($(this));
-+                return option && (
-+                    option.label.toLowerCase() === 'custom'
-+                    || option.value.toLowerCase() === 'custom'
-+                );
-+            });
-+
-+            if (existingCustomOption.length === 0) {
-+                container.append(buildDropdownModalItem({ label: 'Custom', value: 'custom' }, true));
-+            }
-+        }
-+
 +        $("#createDropdownModal").on("show.bs.modal", function () {
 +            const target = $("#createDropdownItemsContainer").empty();
 +            $("#newVariableDropdownItemsContainer .dropdown-option-value").each(function () {
@@ -539,10 +522,6 @@ index fbc1478..166d080 100644
 +
 +        $("#addCreateDropdownItem").on("click", function () {
 +            $("#createDropdownItemsContainer").append(buildDropdownModalItem(null, true));
-+        });
-+
-+        $("#addCreateCustomDropdownItem").on("click", function () {
-+            addCustomDropdownModalItem("#createDropdownItemsContainer");
 +        });
 +
 +        $("#saveCreateDropdownItems").on("click", function () {
@@ -574,10 +553,6 @@ index fbc1478..166d080 100644
 +
 +        $("#addEditDropdownItem").on("click", function () {
 +            $("#editDropdownItemsContainer").append(buildDropdownModalItem(null, true));
-+        });
-+
-+        $("#addEditCustomDropdownItem").on("click", function () {
-+            addCustomDropdownModalItem("#editDropdownItemsContainer");
 +        });
 +
 +        $("#saveEditDropdownItems").on("click", function () {
@@ -625,6 +600,249 @@ index fbc1478..166d080 100644
          $('.pOptions').select2();
          $('[data-action="delete"]').on('mouseenter', function (event) {
              $(this).find('i').html(' Delete Variable');
+
+diff --git a/resources/views/admin/servers/view/startup.blade.php b/resources/views/admin/servers/view/startup.blade.php
+index f213b19..007fe8f 100644
+--- a/resources/views/admin/servers/view/startup.blade.php
++++ b/resources/views/admin/servers/view/startup.blade.php
+@@ -32,6 +32,11 @@
+                     <label for="pDefaultStartupCommand" class="form-label">Default Service Start Command</label>
+                     <input id="pDefaultStartupCommand" class="form-control" type="text" readonly />
+                 </div>
++                <div class="box-body">
++                    <label for="pResolvedStartupCommand" class="form-label">Resolved Startup Preview</label>
++                    <input id="pResolvedStartupCommand" class="form-control" type="text" readonly />
++                    <p class="small text-muted">Shows the startup command with the currently selected variable values applied.</p>
++                </div>
+                 <div class="box-footer">
+                     {!! csrf_field() !!}
+                     <button type="submit" class="btn btn-primary btn-sm pull-right">Save Modifications</button>
+@@ -113,27 +118,160 @@
+         return div.innerHTML;
+     }
+ 
++    function normalizeDropdownOption(option) {
++        if (_.isNil(option)) {
++            return null;
++        }
++
++        var title = '';
++        var variable = '';
++
++        if (_.isObject(option) && !_.isArray(option)) {
++            title = _.trim(String(_.get(option, 'label', _.get(option, 'title', ''))));
++            variable = _.trim(String(_.get(option, 'value', _.get(option, 'variable', title))));
++        } else {
++            title = _.trim(String(option));
++            variable = title;
++        }
++
++        if (!title.length && !variable.length) {
++            return null;
++        }
++
++        if (!title.length) {
++            title = variable;
++        }
++
++        if (!variable.length) {
++            variable = title;
++        }
++
++        return { label: title, value: variable };
++    }
++
++    function getStartupVariableValues() {
++        var values = {};
++
++        $('#appendVariablesTo').find('.startup-variable-wrapper').each(function () {
++            var envVariable = $(this).data('envVariable');
++            values[envVariable] = ($(this).find('.startup-variable-value').val() || '').toString();
++        });
++
++        return values;
++    }
++
++    function resolveStartupCommand(command) {
++        var resolved = (command || '').toString();
++        var values = getStartupVariableValues();
++
++        $.each(values, function (envVariable, value) {
++            resolved = resolved.split('{{' + envVariable + '}}').join(value);
++        });
++
++        return resolved;
++    }
++
++    function refreshResolvedStartupCommand() {
++        $('#pResolvedStartupCommand').val(resolveStartupCommand($('#pStartup').val()));
++    }
++
++    function syncDropdownVariableInput(wrapper) {
++        var select = wrapper.find('.startup-variable-select');
++        var customInput = wrapper.find('.startup-variable-custom-input');
++        var valueInput = wrapper.find('.startup-variable-value');
++        var optionValues = _.map(wrapper.data('dropdownOptions') || [], function (option) {
++            return _.get(option, 'value');
++        });
++        var currentValue = (valueInput.val() || '').toString();
++        var hasCustomOption = _.includes(optionValues, 'custom');
++        var isPresetValue = _.includes(optionValues, currentValue) && currentValue !== 'custom';
++        var usesCustomValue = hasCustomOption && currentValue !== 'custom' && !isPresetValue;
++        var fallbackValue = _.find(optionValues, function (value) {
++            return value !== 'custom';
++        }) || _.head(optionValues) || '';
++
++        if (!currentValue.length && fallbackValue.length) {
++            currentValue = fallbackValue;
++            valueInput.val(currentValue);
++        }
++
++        if (usesCustomValue) {
++            select.val('custom');
++            customInput.val(currentValue).show();
++        } else {
++            select.val(currentValue);
++            customInput.val('').hide();
++        }
++
++        if (!select.val() && currentValue.length && !hasCustomOption) {
++            select.prepend('<option value="' + escapeHtml(currentValue) + '">' + escapeHtml(currentValue) + '</option>');
++            select.val(currentValue);
++        }
++    }
++
++    function buildVariableBox(item, setValue) {
++        var isRequired = (item.required === 1) ? '<span class="label label-danger">Required</span> ' : '';
++        var wrapper = $('<div class="col-xs-12">');
++        var box = $('<div class="box">');
++        var header = $('<div class="box-header with-border">')
++            .append('<h3 class="box-title">' + isRequired + escapeHtml(item.name) + '</h3>');
++        var body = $('<div class="box-body startup-variable-wrapper">').attr('data-env-variable', item.env_variable);
++        var footer = $('<div class="box-footer">')
++            .append('<p class="no-margin text-muted small"><strong>Startup Command Variable:</strong> <code>' + escapeHtml(item.env_variable) + '</code></p>')
++            .append('<p class="no-margin text-muted small"><strong>Input Rules:</strong> <code>' + escapeHtml(item.rules) + '</code></p>');
++
++        var dropdownOptions = _.chain(_.get(item, 'dropdown_options', []))
++            .map(normalizeDropdownOption)
++            .filter()
++            .value();
++
++        if (dropdownOptions.length > 0) {
++            var valueInput = $('<input type="hidden" class="startup-variable-value" />')
++                .attr('name', 'environment[' + item.env_variable + ']')
++                .val(setValue || '');
++            var select = $('<select class="form-control startup-variable-select"></select>');
++            var customInput = $('<input type="text" class="form-control startup-variable-custom-input" style="margin-top: 8px; display: none;" placeholder="Custom value" />');
++
++            _.forEach(dropdownOptions, function (option) {
++                select.append('<option value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + '</option>');
++            });
++
++            body.data('dropdownOptions', dropdownOptions)
++                .append(valueInput)
++                .append(select)
++                .append(customInput)
++                .append('<p class="no-margin small text-muted" style="margin-top: 8px;">' + escapeHtml(item.description) + '</p>');
++
++            syncDropdownVariableInput(body);
++        } else {
++            body.append('<input name="environment[' + escapeHtml(item.env_variable) + ']" class="form-control startup-variable-value startup-variable-text" type="text" id="egg_variable_' + escapeHtml(item.env_variable) + '" value="' + escapeHtml(setValue || '') + '" />')
++                .append('<p class="no-margin small text-muted">' + escapeHtml(item.description) + '</p>');
++        }
++
++        return wrapper.append(box.append(header).append(body).append(footer));
++    }
++
+     $(document).ready(function () {
+         $('#pEggId').select2({placeholder: 'Select a Nest Egg'}).on('change', function () {
+             var selectedEgg = _.isNull($(this).val()) ? $(this).find('option').first().val() : $(this).val();
+-            var parentChain = _.get(Pterodactyl.nests, $("#pNestId").val());
++            var parentChain = _.get(Pterodactyl.nests, $('#pNestId').val());
+             var objectChain = _.get(parentChain, 'eggs.' + selectedEgg);
+ 
+-            const images = _.get(objectChain, 'docker_images', [])
++            const images = _.get(objectChain, 'docker_images', []);
+             $('#pDockerImage').html('');
+             const keys = Object.keys(images);
+             for (let i = 0; i < keys.length; i++) {
+                 let opt = document.createElement('option');
+                 opt.value = images[keys[i]];
+-                opt.innerText = keys[i] + " (" + images[keys[i]] + ")";
++                opt.innerText = keys[i] + ' (' + images[keys[i]] + ')';
+                 if (objectChain.id === parseInt(Pterodactyl.server.egg_id) && Pterodactyl.server.image == opt.value) {
+-                    opt.selected = true
++                    opt.selected = true;
+                 }
+                 $('#pDockerImage').append(opt);
+             }
+             $('#pDockerImage').on('change', function () {
+                 $('#pDockerImageCustom').val('');
+-            })
++            });
+ 
+             if (objectChain.id === parseInt(Pterodactyl.server.egg_id)) {
+                 if ($('#pDockerImage').val() != Pterodactyl.server.image) {
+@@ -150,25 +288,39 @@
+             $('#appendVariablesTo').html('');
+             $.each(_.get(objectChain, 'variables', []), function (i, item) {
+                 var setValue = _.get(Pterodactyl.server_variables, item.env_variable, item.default_value);
+-                var isRequired = (item.required === 1) ? '<span class="label label-danger">Required</span> ' : '';
+-                var dataAppend = ' \
+-                    <div class="col-xs-12"> \
+-                        <div class="box"> \
+-                            <div class="box-header with-border"> \
+-                                <h3 class="box-title">' + isRequired + escapeHtml(item.name) + '</h3> \
+-                            </div> \
+-                            <div class="box-body"> \
+-                                <input name="environment[' + escapeHtml(item.env_variable) + ']" class="form-control" type="text" id="egg_variable_' + escapeHtml(item.env_variable) + '" /> \
+-                                <p class="no-margin small text-muted">' + escapeHtml(item.description) + '</p> \
+-                            </div> \
+-                            <div class="box-footer"> \
+-                                <p class="no-margin text-muted small"><strong>Startup Command Variable:</strong> <code>' + escapeHtml(item.env_variable) + '</code></p> \
+-                                <p class="no-margin text-muted small"><strong>Input Rules:</strong> <code>' + escapeHtml(item.rules) + '</code></p> \
+-                            </div> \
+-                        </div> \
+-                    </div>';
+-                $('#appendVariablesTo').append(dataAppend).find('#egg_variable_' + item.env_variable).val(setValue);
++                $('#appendVariablesTo').append(buildVariableBox(item, setValue));
+             });
++
++            refreshResolvedStartupCommand();
+         });
+ 
++        $('#appendVariablesTo').on('change', '.startup-variable-select', function () {
++            var wrapper = $(this).closest('.startup-variable-wrapper');
++            var valueInput = wrapper.find('.startup-variable-value');
++            var customInput = wrapper.find('.startup-variable-custom-input');
++
++            if ($(this).val() === 'custom') {
++                valueInput.val(customInput.val() || '');
++                customInput.show().trigger('focus');
++            } else {
++                valueInput.val($(this).val() || '');
++                customInput.val('').hide();
++            }
++
++            refreshResolvedStartupCommand();
++        });
++
++        $('#appendVariablesTo').on('input', '.startup-variable-custom-input, .startup-variable-text', function () {
++            var wrapper = $(this).closest('.startup-variable-wrapper');
++            if ($(this).hasClass('startup-variable-custom-input')) {
++                wrapper.find('.startup-variable-value').val($(this).val() || '');
++            }
++
++            refreshResolvedStartupCommand();
++        });
++
++        $('#pStartup').on('input', function () {
++            refreshResolvedStartupCommand();
++        });
++
+         $('#pNestId').select2({placeholder: 'Select a Nest'}).on('change', function () {
+             $('#pEggId').html('').select2({
+                 data: $.map(_.get(Pterodactyl.nests, $(this).val() + '.eggs', []), function (item) {
 
 diff --git a/resources/scripts/api/server/types.d.ts b/resources/scripts/api/server/types.d.ts
 --- a/resources/scripts/api/server/types.d.ts
