@@ -889,10 +889,10 @@ index 602ac21..3a2d799 100644
      rules: attributes.rules.split('|'),
  });
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..f034fca 100644
+index cffadd8..aa136c3 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,136 +1,222 @@
+@@ -1,136 +1,229 @@
 -import React, { memo, useState } from 'react';
 +import React, { memo, useEffect, useState } from 'react';
  import { ServerEggVariable } from '@/api/server/types';
@@ -961,41 +961,45 @@ index cffadd8..f034fca 100644
 +    const hasCustomDropdownOption = dropdownOptions.some((option) => option.value === CUSTOM_DROPDOWN_OPTION);
 +    const presetDropdownOptions = dropdownOptions.filter((option) => option.value !== CUSTOM_DROPDOWN_OPTION);
 +    const resolvedValue = variable.serverValue ?? variable.defaultValue ?? '';
-+    const hasResolvedPresetDropdownValue = presetDropdownOptions.some((option) => option.value === resolvedValue);
 +    const customDropdownOption = dropdownOptions.find((option) => option.value === CUSTOM_DROPDOWN_OPTION);
++    const [currentValue, setCurrentValue] = useState(resolvedValue);
 +    const [customValue, setCustomValue] = useState(resolvedValue);
++    const hasResolvedPresetDropdownValue = presetDropdownOptions.some((option) => option.value === currentValue);
++    const shouldShowFallbackDropdownValue = currentValue.length > 0 && !hasResolvedPresetDropdownValue && !hasCustomDropdownOption;
++    const renderedPresetDropdownOptions = shouldShowFallbackDropdownValue
++        ? [{ label: currentValue, value: currentValue }, ...presetDropdownOptions]
++        : presetDropdownOptions;
 +    const [isCustomDropdownEntry, setIsCustomDropdownEntry] = useState(
-+        hasCustomDropdownOption && resolvedValue.length > 0 && !hasResolvedPresetDropdownValue
++        hasCustomDropdownOption && resolvedValue.length > 0 && !presetDropdownOptions.some((option) => option.value === resolvedValue)
 +    );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
 +    const selectedDropdownValue = isCustomDropdownEntry && hasCustomDropdownOption
 +        ? CUSTOM_DROPDOWN_OPTION
-+        : hasResolvedPresetDropdownValue
-+            ? resolvedValue
-+            : '';
-+    const showDropdownPlaceholder = !isCustomDropdownEntry && presetDropdownOptions.length > 0 && !hasResolvedPresetDropdownValue;
++        : currentValue;
++    const showDropdownPlaceholder = !isCustomDropdownEntry && renderedPresetDropdownOptions.length > 0 && !currentValue.length;
 +
 +    useEffect(() => {
++        setCurrentValue(resolvedValue);
 +        setCustomValue(resolvedValue);
 +        setIsCustomDropdownEntry(
-+            hasCustomDropdownOption && resolvedValue.length > 0 && !hasResolvedPresetDropdownValue
++            hasCustomDropdownOption && resolvedValue.length > 0 && !presetDropdownOptions.some((option) => option.value === resolvedValue)
 +        );
 +    }, [
 +        resolvedValue,
 +        hasCustomDropdownOption,
-+        hasResolvedPresetDropdownValue,
 +        presetDropdownOptions.map((option) => `${option.label}:${option.value}`).join('|'),
 +    ]);
 +
 +    const handleDropdownChange = (value: string) => {
 +        if (value === CUSTOM_DROPDOWN_OPTION && hasCustomDropdownOption) {
 +            setIsCustomDropdownEntry(true);
-+            setCustomValue(presetDropdownOptions.some((option) => option.value === resolvedValue) ? '' : resolvedValue);
++            setCustomValue(hasResolvedPresetDropdownValue ? '' : currentValue);
 +            return;
 +        }
 +
 +        setIsCustomDropdownEntry(false);
++        setCurrentValue(value);
 +        setCustomValue(value);
 +        setRawVariableValue(value);
 +    };
@@ -1048,7 +1052,7 @@ index cffadd8..f034fca 100644
 +                                            {variable.defaultValue || 'Select a value'}
 +                                        </option>
 +                                    )}
-+                                    {presetDropdownOptions.map((option) => (
++                                    {renderedPresetDropdownOptions.map((option) => (
 +                                        <option key={`${option.value}:${option.label}`} value={option.value}>
 +                                            {option.label}
 +                                        </option>
@@ -1066,7 +1070,10 @@ index cffadd8..f034fca 100644
 +                                                setVariableValue(e.currentTarget.value);
 +                                            }
 +                                        }}
-+                                        onChange={(e) => setCustomValue(e.currentTarget.value)}
++                                        onChange={(e) => {
++                                            setCurrentValue(e.currentTarget.value);
++                                            setCustomValue(e.currentTarget.value);
++                                        }}
 +                                        readOnly={!canEdit || !variable.isEditable}
 +                                        name={variable.envVariable}
 +                                        value={customValue}
