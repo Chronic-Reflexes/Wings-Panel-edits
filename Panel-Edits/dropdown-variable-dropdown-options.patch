@@ -889,7 +889,7 @@ index 602ac21..3a2d799 100644
      rules: attributes.rules.split('|'),
  });
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
-index cffadd8..924bc4b 100644
+index cffadd8..f034fca 100644
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
 @@ -1,136 +1,222 @@
@@ -997,7 +997,7 @@ index cffadd8..924bc4b 100644
 +
 +        setIsCustomDropdownEntry(false);
 +        setCustomValue(value);
-+        setVariableValue(value);
++        setRawVariableValue(value);
 +    };
  
      return (
