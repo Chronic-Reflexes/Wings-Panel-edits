@@ -457,10 +457,10 @@ index fbc1478..166d080 100644
 +        }
 +
 +        function getDropdownModalItemOption(item) {
-+            const editor = item.find('.dropdown-option-editor');
-+            const title = editor.is(':visible')
-+                ? (item.find('.dropdown-option-summary-text').val() || '').toString().trim()
-+                : (item.data('dropdownTitle') || '').toString().trim();
++            const titleInput = item.find('.dropdown-option-summary-text');
++            const title = titleInput.prop('readonly')
++                ? (item.data('dropdownTitle') || '').toString().trim()
++                : (titleInput.val() || '').toString().trim();
 +            const variable = (item.find('.dropdown-option-variable-input').val() || '').toString().trim();
 +
 +            return normalizeDropdownOption({ label: title, value: variable });
