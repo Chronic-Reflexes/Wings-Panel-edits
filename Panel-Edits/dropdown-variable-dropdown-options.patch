@@ -382,7 +382,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +
  const VariableBox = ({ variable }: Props) => {
      const FLASH_KEY = `server:startup:${variable.envVariable}`;
-
+ 
 @@ -23,29 +25,36 @@ const VariableBox = ({ variable }: Props) => {
      const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
      const [loading, setLoading] = useState(false);
