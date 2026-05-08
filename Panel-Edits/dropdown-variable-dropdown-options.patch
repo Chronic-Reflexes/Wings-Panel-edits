@@ -974,16 +974,16 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                                placeholder='Enter custom value...'
 +                                disabled={!canEdit || !variable.isEditable}
 +                            />
-+                            <div css={tw`flex gap-2 mt-2`}>
++                            <div className='flex gap-2 mt-2'>
 +                                <button
-+                                    css={tw`px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm`}
++                                    className='px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm'
 +                                    onClick={handleCustomInputSubmit}
 +                                    disabled={!canEdit || !variable.isEditable}
 +                                >
 +                                    Save
 +                                </button>
 +                                <button
-+                                    css={tw`px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm`}
++                                    className='px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm'
 +                                    onClick={() => {
 +                                        setIsCustomMode(false);
 +                                        setCustomInputValue('');
