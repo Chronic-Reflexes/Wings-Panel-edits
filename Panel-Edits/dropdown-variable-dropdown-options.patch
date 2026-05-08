@@ -1,4 +1,4 @@
-diff --git a/app/Models/EggVariable.php b/app/Models/EggVariable.php
+﻿diff --git a/app/Models/EggVariable.php b/app/Models/EggVariable.php
 --- a/app/Models/EggVariable.php
 +++ b/app/Models/EggVariable.php
 @@ -21,6 +21,7 @@
@@ -889,320 +889,72 @@ index 602ac21..3a2d799 100644
      rules: attributes.rules.split('|'),
  });
 
-
-﻿--- "c:\\Users\\Partr\\OneDrive\\Desktop\\Panel\\Source\\panel-1.0-develop(NO-EDITS)\\resources\\scripts\\components\\server\\startup\\VariableBox.tsx"	2026-05-07 17:56:35.595914700 -0400
-+++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,136 +1,195 @@
--import React, { memo, useState } from 'react';
-+import React, { useState } from 'react';
- import { ServerEggVariable } from '@/api/server/types';
--import TitledGreyBox from '@/components/elements/TitledGreyBox';
--import { usePermissions } from '@/plugins/usePermissions';
--import InputSpinner from '@/components/elements/InputSpinner';
--import Input from '@/components/elements/Input';
-+import Input, { Textarea } from '@/components/elements/Input';
- import Switch from '@/components/elements/Switch';
-+import tw from 'twin.macro';
- import { debounce } from 'debounce';
- import updateStartupVariable from '@/api/server/updateStartupVariable';
- import useFlash from '@/plugins/useFlash';
--import FlashMessageRender from '@/components/FlashMessageRender';
--import getServerStartup from '@/api/swr/getServerStartup';
-+import { ServerContext } from '@/state/server';
- import Select from '@/components/elements/Select';
- import isEqual from 'react-fast-compare';
--import { ServerContext } from '@/state/server';
- 
- interface Props {
-     variable: ServerEggVariable;
- }
- 
- const VariableBox = ({ variable }: Props) => {
--    const FLASH_KEY = `server:startup:${variable.envVariable}`;
--
--    const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
--    const [loading, setLoading] = useState(false);
--    const [canEdit] = usePermissions(['startup.update']);
-     const { clearFlashes, clearAndAddHttpError } = useFlash();
--    const { mutate } = getServerStartup(uuid);
-+    const [isEditable, setIsEditable] = useState(true);
-+    const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
-+    const { mutate } = ServerContext.useStoreActions((actions) => actions.server);
- 
--    const setVariableValue = debounce((value: string) => {
--        setLoading(true);
--        clearFlashes(FLASH_KEY);
-+    const useDebounce = debounce(function (value: string) {
-+        setIsEditable(false);
-+        clearFlashes('server:startup');
- 
-         updateStartupVariable(uuid, variable.envVariable, value)
--            .then(([response, invocation]) =>
--                mutate(
--                    (data) => ({
--                        ...data,
--                        invocation,
--                        variables: (data.variables || []).map((v) =>
--                            v.envVariable === response.envVariable ? response : v
--                        ),
--                    }),
--                    false
--                )
--            )
-+            .then((v) => mutate((s) => ({ ...s, variables: s.variables.map((v2) => (v2.envVariable === v.envVariable ? v : v2)) })))
-             .catch((error) => {
-                 console.error(error);
--                clearAndAddHttpError({ error, key: FLASH_KEY });
-+                clearAndAddHttpError({ error, key: 'server:startup' });
-             })
--            .then(() => setLoading(false));
-+            .then(() => setIsEditable(true));
-     }, 500);
- 
--    const useSwitch = variable.rules.some(
--        (v) => v === 'boolean' || v === 'in:0,1' || v === 'in:1,0' || v === 'in:true,false' || v === 'in:false,true'
--    );
--    const isStringSwitch = variable.rules.some((v) => v === 'string');
--    const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
-+    const setVariableValue = (value: string) => {
-+        mutate((s) => ({
-+            ...s,
-+            variables: s.variables.map((v) => (v.envVariable === variable.envVariable ? { ...v, serverValue: value } : v)),
-+        }));
-+        useDebounce(value);
-+    };
-+
-+    /**
-+     * Helper to completely bypass the debounce when the user selects a dropdown option.
-+     * We mutate SWR immediately and persist immediately.
-+     */
-+    const handleDropdownSelect = (value: string) => {
-+        setIsEditable(false);
-+        clearFlashes('server:startup');
-+
-+        // immediately mutate UI state
-+        mutate((s) => ({
-+            ...s,
-+            variables: s.variables.map((v) => (v.envVariable === variable.envVariable ? { ...v, serverValue: value } : v)),
-+        }));
- 
--    return (
--        <TitledGreyBox
--            title={
--                <p className='text-sm uppercase'>
--                    {!variable.isEditable && (
--                        <span className='bg-neutral-700 text-xs py-1 px-2 rounded-full mr-2 mb-1'>Read Only</span>
--                    )}
-+        updateStartupVariable(uuid, variable.envVariable, value)
-+            .then((v) => mutate((s) => ({ ...s, variables: s.variables.map((v2) => (v2.envVariable === v.envVariable ? v : v2)) })))
-+            .catch((error) => {
-+                console.error(error);
-+                clearAndAddHttpError({ error, key: 'server:startup' });
-+            })
-+            .then(() => setIsEditable(true));
-+    };
-+
-+    // Determine the array of dropdown options if validation rules indicate
-+    const options = React.useMemo(() => {
-+        if (!variable.rules.includes('dropdown')) return [];
-+        const optionsRule = variable.rules.split('|').find(r => r.startsWith('options:'));
-+        if (!optionsRule) return [];
-+        const optsString = optionsRule.replace('options:', '');
-+        return optsString.split(',').map(opt => {
-+            const parts = opt.split(':', 2);
-+            return parts.length === 2 ? { value: parts[0], label: parts[1] } : { value: parts[0], label: parts[0] };
-+        });
-+    }, [variable.rules]);
-+
-+    // Check if dropdown is active
-+    if (variable.rules.includes('dropdown')) {
-+        return (
-+            <div css={tw\g-neutral-900 shadow-md rounded p-4\}>
-+                <label
-+                    htmlFor={variable.envVariable}
-+                    css={tw\	ext-xs text-neutral-300 uppercase font-semibold mb-2 block\}
-+                >
-                     {variable.name}
--                </p>
--            }
--        >
--            <FlashMessageRender byKey={FLASH_KEY} className='mb-2 md:mb-4' />
--            <InputSpinner visible={loading}>
--                {useSwitch ? (
--                    <>
--                        <Switch
--                            readOnly={!canEdit || !variable.isEditable}
--                            name={variable.envVariable}
--                            defaultChecked={
--                                isStringSwitch ? variable.serverValue === 'true' : variable.serverValue === '1'
-+                </label>
-+                <Select
-+                    id={variable.envVariable}
-+                    value={variable.serverValue}
-+                    onChange={(e) => handleDropdownSelect(e.currentTarget.value)}
-+                    disabled={!variable.isEditable || !isEditable}
-+                >
-+                    {options.map((opt, i) => (
-+                        <option key={i} value={opt.value}>
-+                            {opt.label}
-+                        </option>
-+                    ))}
-+                </Select>
-+                <p css={tw\	ext-xs text-neutral-400 mt-2\}>{variable.description}</p>
-+            </div>
-+        );
-+    }
-+
-+    if (variable.rules.includes('boolean')) {
-+        return (
-+            <div css={tw\g-neutral-900 shadow-md rounded p-4 flex flex-col justify-between\}>
-+                <div>
-+                    <label
-+                        htmlFor={variable.envVariable}
-+                        css={tw\	ext-xs text-neutral-300 uppercase font-semibold mb-2 block\}
-+                    >
-+                        {variable.name}
-+                    </label>
-+                    <p css={tw\	ext-xs text-neutral-400 mb-4\}>{variable.description}</p>
-+                </div>
-+                <div css={tw\mt-2 flex items-center\}>
-+                    <p css={tw\	ext-neutral-400 mr-4 font-semibold text-sm w-8 uppercase\}>
-+                        {variable.serverValue === '1' || variable.serverValue === 'true' ? 'On' : 'Off'}
-+                    </p>
-+                    <Switch
-+                        name={variable.envVariable}
-+                        defaultChecked={variable.serverValue === '1' || variable.serverValue === 'true'}
-+                        onChange={() => {
-+                            if (variable.serverValue === '1' || variable.serverValue === 'true') {
-+                                setVariableValue('0');
-+                            } else {
-+                                setVariableValue('1');
-                             }
--                            onChange={() => {
--                                if (canEdit && variable.isEditable) {
--                                    if (isStringSwitch) {
--                                        setVariableValue(variable.serverValue === 'true' ? 'false' : 'true');
--                                    } else {
--                                        setVariableValue(variable.serverValue === '1' ? '0' : '1');
--                                    }
--                                }
--                            }}
--                        />
--                    </>
--                ) : (
--                    <>
--                        {selectValues.length > 0 ? (
--                            <>
--                                <Select
--                                    onChange={(e) => setVariableValue(e.target.value)}
--                                    name={variable.envVariable}
--                                    defaultValue={variable.serverValue ?? variable.defaultValue}
--                                    disabled={!canEdit || !variable.isEditable}
--                                >
--                                    {selectValues.map((selectValue) => (
--                                        <option
--                                            key={selectValue.replace('in:', '')}
--                                            value={selectValue.replace('in:', '')}
--                                        >
--                                            {selectValue.replace('in:', '')}
--                                        </option>
--                                    ))}
--                                </Select>
--                            </>
--                        ) : (
--                            <>
--                                <Input
--                                    onKeyUp={(e) => {
--                                        if (canEdit && variable.isEditable) {
--                                            setVariableValue(e.currentTarget.value);
--                                        }
--                                    }}
--                                    readOnly={!canEdit || !variable.isEditable}
--                                    name={variable.envVariable}
--                                    defaultValue={variable.serverValue ?? ''}
--                                    placeholder={variable.defaultValue}
--                                />
--                            </>
--                        )}
--                    </>
--                )}
--            </InputSpinner>
-+                        }}
-+                    />
-+                </div>
-+            </div>
-+        );
-+    }
- 
--            <p className='mt-1 text-xs text-neutral-300'>{variable.description}</p>
--        </TitledGreyBox>
-+    return (
-+        <div css={tw\g-neutral-900 shadow-md rounded p-4\}>
-+            <label
-+                htmlFor={variable.envVariable}
-+                css={tw\	ext-xs text-neutral-300 uppercase font-semibold mb-2 block\}
-+            >
-+                {variable.name}
-+            </label>
-+            {variable.envVariable === 'SRCDS_TOKEN' ? (
-+                <div css={tw\lex items-center\}>
-+                    <Input
-+                        onKeyUp={(e) => {
-+                            setVariableValue(e.currentTarget.value);
-+                        }}
-+                        id={variable.envVariable}
-+                        name={variable.envVariable}
-+                        type={'text'}
-+                        defaultValue={variable.serverValue}
-+                        placeholder={variable.defaultValue}
-+                    />
-+                    <a
-+                        css={tw\ml-4 text-xs text-neutral-300 font-semibold hover:text-neutral-200 transition-colors duration-150\}
-+                        href={'https://steamcommunity.com/dev/managegameservers'}
-+                        target={'_blank'}
-+                        rel={'noreferrer'}
-+                    >
-+                        Generate Token
-+                    </a>
-+                </div>
-+            ) : variable.rules.split('|').indexOf('string') === -1 ? (
-+                <Input
-+                    onKeyUp={(e) => {
-+                        setVariableValue(e.currentTarget.value);
-+                    }}
-+                    id={variable.envVariable}
-+                    name={variable.envVariable}
-+                    type={'text'}
-+                    defaultValue={variable.serverValue}
-+                    placeholder={variable.defaultValue}
-+                />
-+            ) : (
-+                <Textarea
-+                    css={tw\h-24\}
-+                    onChange={(e) => {
-+                        setVariableValue(e.currentTarget.value);
-+                    }}
-+                    id={variable.envVariable}
-+                    name={variable.envVariable}
-+                    defaultValue={variable.serverValue}
-+                    placeholder={variable.defaultValue}
-+                />
-+            )}
-+            <p css={tw\	ext-xs text-neutral-400 mt-2\}>{variable.description}</p>
-+        </div>
-     );
- };
- 
--export default memo(VariableBox, isEqual);
-+export default React.memo(VariableBox, isEqual);
-\ No newline at end of file
-
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -135,4 +135,4 @@
+@@ -56,6 +56,64 @@
      );
- };
+     const isStringSwitch = variable.rules.some((v) => v === 'string');
+     const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
++
++
++
++    const handleDropdownSelect = (value: string) => {
++        setLoading(true);
++        clearFlashes(FLASH_KEY);
++
++        updateStartupVariable(uuid, variable.envVariable, value)
++            .then(([response, invocation]) =>
++                mutate(
++                    (data) => ({
++                        ...data,
++                        invocation,
++                        variables: (data.variables || []).map((v) =>
++                            v.envVariable === response.envVariable ? response : v
++                        ),
++                    }),
++                    false
++                )
++            )
++            .catch((error) => {
++                console.error(error);
++                clearAndAddHttpError({ error, key: FLASH_KEY });
++            })
++            .then(() => setLoading(false));
++    };
++
++    if (variable.dropdownOptions && variable.dropdownOptions.length > 0) {
++        return (
++            <TitledGreyBox
++                title={
++                    <p className='text-sm uppercase'>
++                        {!variable.isEditable && (
++                            <span className='bg-neutral-700 text-xs py-1 px-2 rounded-full mr-2 mb-1'>Read Only</span>
++                        )}
++                        {variable.name}
++                    </p>
++                }
++            >
++                <FlashMessageRender byKey={FLASH_KEY} className='mb-2 md:mb-4' />
++                <InputSpinner visible={loading}>
++                    <Select
++                        onChange={(e) => handleDropdownSelect(e.currentTarget.value)}
++                        name={variable.envVariable}
++                        defaultValue={variable.serverValue ?? variable.defaultValue}
++                        disabled={!canEdit || !variable.isEditable}
++                    >
++                        {variable.dropdownOptions.map((option, i) => (
++                            <option key={i} value={option.value}>
++                                {option.label}
++                            </option>
++                        ))}
++                    </Select>
++                </InputSpinner>
++                <p className='mt-1 text-xs text-neutral-300'>{variable.description}</p>
++            </TitledGreyBox>
++        );
++    }
  
--export default memo(VariableBox, isEqual);
-+export default React.memo(VariableBox, isEqual);
+     return (
+         <TitledGreyBox
+
