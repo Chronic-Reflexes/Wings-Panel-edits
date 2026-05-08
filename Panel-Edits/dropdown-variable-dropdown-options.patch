@@ -892,12 +892,15 @@ index 602ac21..3a2d799 100644
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -56,6 +56,77 @@
+@@ -56,6 +56,135 @@
      );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
 +
 +
++
++    const [customInputValue, setCustomInputValue] = React.useState('');
++    const [isCustomMode, setIsCustomMode] = React.useState(false);
 +
 +    const setRawVariableValue = (value: string) => {
 +        console.log('[DROPDOWN DEBUG] setRawVariableValue called - value:', value, 'envVar:', variable.envVariable, 'uuid:', uuid);
@@ -928,7 +931,23 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +            });
 +    };
 +
++    const handleCustomInputChange = (value: string) => {
++        setCustomInputValue(value);
++    };
++
++    const handleCustomInputSubmit = () => {
++        if (customInputValue.trim()) {
++            setRawVariableValue(customInputValue.trim());
++            setIsCustomMode(false);
++            setCustomInputValue('');
++        }
++    };
++
 +    if (variable.dropdownOptions && variable.dropdownOptions.length > 0) {
++        const hasCustomOption = variable.dropdownOptions.some(
++            (opt) => opt.value.toLowerCase() === 'custom'
++        );
++
 +        return (
 +            <TitledGreyBox
 +                title={
@@ -942,26 +961,65 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +            >
 +                <FlashMessageRender byKey={FLASH_KEY} className='mb-2 md:mb-4' />
 +                <InputSpinner visible={loading}>
-+                    <Select
-+                        onChange={(e) => {
-+                            const selectedValue = e.target.value;
-+                            console.log('[DROPDOWN DEBUG] onChange fired - selectedValue:', selectedValue, 'canEdit:', canEdit, 'isEditable:', variable.isEditable);
-+                            if (canEdit && variable.isEditable) {
-+                                setRawVariableValue(selectedValue);
-+                            } else {
-+                                console.warn('[DROPDOWN DEBUG] Change blocked - canEdit:', canEdit, 'isEditable:', variable.isEditable);
-+                            }
-+                        }}
-+                        name={variable.envVariable}
-+                        value={variable.serverValue ?? variable.defaultValue}
-+                        disabled={!canEdit || !variable.isEditable}
-+                    >
-+                        {variable.dropdownOptions.map((option, i) => (
-+                            <option key={i} value={option.value}>
-+                                {option.label}
-+                            </option>
-+                        ))}
-+                    </Select>
++                    {isCustomMode && hasCustomOption ? (
++                        <div>
++                            <Input
++                                value={customInputValue}
++                                onChange={(e) => handleCustomInputChange(e.target.value)}
++                                onKeyPress={(e) => {
++                                    if (e.key === 'Enter' && canEdit && variable.isEditable) {
++                                        handleCustomInputSubmit();
++                                    }
++                                }}
++                                placeholder='Enter custom value...'
++                                disabled={!canEdit || !variable.isEditable}
++                            />
++                            <div css={tw`flex gap-2 mt-2`}>
++                                <button
++                                    css={tw`px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm`}
++                                    onClick={handleCustomInputSubmit}
++                                    disabled={!canEdit || !variable.isEditable}
++                                >
++                                    Save
++                                </button>
++                                <button
++                                    css={tw`px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm`}
++                                    onClick={() => {
++                                        setIsCustomMode(false);
++                                        setCustomInputValue('');
++                                    }}
++                                >
++                                    Cancel
++                                </button>
++                            </div>
++                        </div>
++                    ) : (
++                        <Select
++                            onChange={(e) => {
++                                const selectedValue = e.target.value;
++                                console.log('[DROPDOWN DEBUG] onChange fired - selectedValue:', selectedValue, 'canEdit:', canEdit, 'isEditable:', variable.isEditable);
++                                if (canEdit && variable.isEditable) {
++                                    if (selectedValue.toLowerCase() === 'custom') {
++                                        setIsCustomMode(true);
++                                        setCustomInputValue('');
++                                    } else {
++                                        setRawVariableValue(selectedValue);
++                                    }
++                                } else {
++                                    console.warn('[DROPDOWN DEBUG] Change blocked - canEdit:', canEdit, 'isEditable:', variable.isEditable);
++                                }
++                            }}
++                            name={variable.envVariable}
++                            value={isCustomMode ? 'custom' : (variable.serverValue ?? variable.defaultValue)}
++                            disabled={!canEdit || !variable.isEditable}
++                        >
++                            {variable.dropdownOptions.map((option, i) => (
++                                <option key={i} value={option.value}>
++                                    {option.label}
++                                </option>
++                            ))}
++                        </Select>
++                    )}
 +                </InputSpinner>
 +                <p className='mt-1 text-xs text-neutral-300'>{variable.description}</p>
 +            </TitledGreyBox>
