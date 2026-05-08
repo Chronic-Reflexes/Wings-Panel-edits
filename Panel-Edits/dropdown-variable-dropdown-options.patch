@@ -469,7 +469,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +        pendingCustomValueTimeout.current = window.setTimeout(() => {
 +            pendingCustomValueTimeout.current = null;
 +            persistVariableValue(value);
-+        }, 5000);
++        }, 2500);
 +    };
 +
 +    const saveCustomValue = (value: string) => {
