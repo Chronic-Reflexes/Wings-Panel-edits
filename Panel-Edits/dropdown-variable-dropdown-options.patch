@@ -1200,13 +1200,7 @@ index 602ac21..3a2d799 100644
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -1,4 +1,4 @@
--import React, { memo, useState } from 'react';
-+import React, { useState } from 'react';
- import { ServerEggVariable } from '@/api/server/types';
- import TitledGreyBox from '@/components/elements/TitledGreyBox';
- import { usePermissions } from '@/plugins/usePermissions';
-@@ -133,4 +133,4 @@
+@@ -135,4 +135,4 @@
      );
  };
  
