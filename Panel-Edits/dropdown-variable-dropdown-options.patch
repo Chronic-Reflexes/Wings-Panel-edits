@@ -892,7 +892,7 @@ index 602ac21..3a2d799 100644
 diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resources/scripts/components/server/startup/VariableBox.tsx
 --- a/resources/scripts/components/server/startup/VariableBox.tsx
 +++ b/resources/scripts/components/server/startup/VariableBox.tsx
-@@ -56,6 +56,135 @@
+@@ -56,6 +56,160 @@
      );
      const isStringSwitch = variable.rules.some((v) => v === 'string');
      const selectValues = variable.rules.find((v) => v.startsWith('in:'))?.split(',') || [];
@@ -901,6 +901,26 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +
 +    const [customInputValue, setCustomInputValue] = React.useState('');
 +    const [isCustomMode, setIsCustomMode] = React.useState(false);
++
++    // Check if current value is a custom value (not in dropdown options)
++    React.useEffect(() => {
++        if (variable.dropdownOptions && variable.dropdownOptions.length > 0) {
++            const hasCustomOption = variable.dropdownOptions.some(
++                (opt) => opt.value.toLowerCase() === 'custom'
++            );
++            
++            if (hasCustomOption && variable.serverValue) {
++                const isValueInOptions = variable.dropdownOptions.some(
++                    (opt) => opt.value === variable.serverValue
++                );
++                
++                if (!isValueInOptions) {
++                    setIsCustomMode(true);
++                    setCustomInputValue(variable.serverValue);
++                }
++            }
++        }
++    }, [variable.serverValue, variable.dropdownOptions]);
 +
 +    const setRawVariableValue = (value: string) => {
 +        console.log('[DROPDOWN DEBUG] setRawVariableValue called - value:', value, 'envVar:', variable.envVariable, 'uuid:', uuid);
@@ -938,8 +958,16 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +    const handleCustomInputSubmit = () => {
 +        if (customInputValue.trim()) {
 +            setRawVariableValue(customInputValue.trim());
-+            setIsCustomMode(false);
-+            setCustomInputValue('');
++        }
++    };
++
++    const handleBackToDropdown = () => {
++        setIsCustomMode(false);
++        setCustomInputValue('');
++        // Reset to a valid dropdown value
++        const firstOption = variable.dropdownOptions?.[0]?.value;
++        if (firstOption) {
++            setRawVariableValue(firstOption);
 +        }
 +    };
 +
@@ -978,18 +1006,15 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                                <button
 +                                    className='px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm'
 +                                    onClick={handleCustomInputSubmit}
-+                                    disabled={!canEdit || !variable.isEditable}
++                                    disabled={!canEdit || !variable.isEditable || !customInputValue.trim()}
 +                                >
 +                                    Save
 +                                </button>
 +                                <button
 +                                    className='px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm'
-+                                    onClick={() => {
-+                                        setIsCustomMode(false);
-+                                        setCustomInputValue('');
-+                                    }}
++                                    onClick={handleBackToDropdown}
 +                                >
-+                                    Cancel
++                                    Back to Dropdown
 +                                </button>
 +                            </div>
 +                        </div>
@@ -1010,7 +1035,7 @@ diff --git a/resources/scripts/components/server/startup/VariableBox.tsx b/resou
 +                                }
 +                            }}
 +                            name={variable.envVariable}
-+                            value={isCustomMode ? 'custom' : (variable.serverValue ?? variable.defaultValue)}
++                            value={variable.serverValue ?? variable.defaultValue}
 +                            disabled={!canEdit || !variable.isEditable}
 +                        >
 +                            {variable.dropdownOptions.map((option, i) => (
